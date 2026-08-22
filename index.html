@@ -1,11 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!-- スクリプトの読み込み -->
-  <script type="module" src="https://googleapis.com"></script>
+  <meta charset="utf-8">
+  <!-- 正しいmodel-viewerライブラリの読み込み -->
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
 </head>
 <body>
-  <!-- 3Dモデルの表示 -->
-  <model-viewer src="https://pub-f7944d69e209414b813aafcc0d76c001.r2.dev/sample.glb" alt="3Dモデル" auto-rotate camera-controls></model-viewer>
+  <model-viewer 
+    src="https://pub-f7944d69e209414b813aafcc0d76c001.r2.dev/sample.glb" 
+    alt="3Dモデル" 
+    auto-rotate 
+    camera-controls
+    style="width: 100%; height: 500px;">
+  </model-viewer>
 </body>
 </html>
