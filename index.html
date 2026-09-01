@@ -6,11 +6,14 @@
   <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
 </head>
 <body>
+  <!-- camera-orbit と camera-target を追加して初期位置を制御 -->
   <model-viewer 
     src="https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb" 
     alt="3Dモデル" 
     auto-rotate 
     camera-controls
+    camera-orbit="0deg 75deg 105%"
+    camera-target="0m 0m 0m"
     style="width: 100%; height: 1080px;">
   </model-viewer>
 </body>
