@@ -53,55 +53,55 @@
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // 5. 【ライト設定】★影を落とす平行光源(太陽光)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
+    // 【修正】手動のライト・床は削除しました。
+    // ライトはGLB内のもの(KHR_lights_punctual拡張)をそのまま使います。
+    // カメラもGLB内の「Camera」ノードを読み込み後に使います。
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(5, 10, 2);
-
-    // ★ライトの影を有効化
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-
-    // ★影の描画範囲(修正:未設定だとモデルサイズによって影が消えることがある)
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 50;
-    dirLight.shadow.camera.left = -10;
-    dirLight.shadow.camera.right = 10;
-    dirLight.shadow.camera.top = 10;
-    dirLight.shadow.camera.bottom = -10;
-
-    scene.add(dirLight);
-
-    // 6. 【床の設置】★影を受け止める地面
-    const floorGeo = new THREE.PlaneGeometry(20, 20);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-
-    // ★床は影を「受ける(Receive)」
-    floor.receiveShadow = true;
-    scene.add(floor);
-
-    // 7. 【モデル読み込み】Cloudflare R2のGLBをインポート
+    // 5. 【モデル読み込み】Cloudflare R2のGLBをインポート
     // 【修正】ここに実際の.glbファイルへの完全なURLを入れてください
     // 例: 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb'
-    const modelUrl = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/test01.glb';
+    const modelUrl = 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb';
 
     const loader = new GLTFLoader();
     loader.load(modelUrl, function (gltf) {
       const model = gltf.scene;
 
-      // ★モデル内のすべてのパーツに影の設定を適用
+      // ★モデル内のメッシュとライトに影の設定を適用
       model.traverse(function (node) {
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = true;
         }
+        if (node.isLight) {
+          // ★GLBに含まれるライト(Directional/Spot/Point)の影を有効化
+          node.castShadow = true;
+          if (node.shadow) {
+            node.shadow.mapSize.width = 2048;
+            node.shadow.mapSize.height = 2048;
+          }
+        }
       });
       scene.add(model);
+
+      // ★GLB内に「Camera」があれば、それを初期位置として使う
+      if (gltf.cameras && gltf.cameras.length > 0) {
+        const gltfCamera = gltf.cameras[0];
+
+        // 現在のウィンドウサイズに合わせてアスペクト比を更新
+        if (gltfCamera.isPerspectiveCamera) {
+          gltfCamera.aspect = window.innerWidth / window.innerHeight;
+          gltfCamera.updateProjectionMatrix();
+        }
+
+        camera = gltfCamera;
+
+        // ★カメラが差し替わったのでOrbitControlsも作り直す
+        controls.dispose();
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+      } else {
+        console.warn('GLBファイルにカメラが含まれていません。デフォルトカメラを使用します。');
+      }
     }, undefined, function (error) {
       console.error('モデルの読み込みに失敗しました:', error);
     });
