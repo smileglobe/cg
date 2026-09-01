@@ -23,7 +23,6 @@
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
   let scene, camera, renderer, controls;
 
@@ -50,21 +49,35 @@
 
     document.body.appendChild(renderer.domElement);
 
-    // ★環境光(IBL)を追加(修正:GLBのライトだけだと光が当たらない面が真っ黒になるため)
-    // three.jsエディターと同じ「RoomEnvironment」で全体を柔らかく照らす
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-    pmremGenerator.dispose();
-
     // 4. 【マウス操作】ドラッグで回転、ホイールでズーム
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // 【修正】手動のライト・床は削除しました。
-    // ライトはGLB内のもの(KHR_lights_punctual拡張)をそのまま使います。
-    // カメラもGLB内の「Camera」ノードを読み込み後に使います。
+    // 5. 【ライト設定】★影を落とす平行光源(太陽光)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
 
-    // 5. 【モデル読み込み】Cloudflare R2のGLBをインポート
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(5, 10, 2);
+
+    // ★ライトの影を有効化
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+
+    // ★影の描画範囲(修正:未設定だとモデルサイズによって影が消えることがある)
+    dirLight.shadow.camera.near = 0.5;
+    dirLight.shadow.camera.far = 50;
+    dirLight.shadow.camera.left = -10;
+    dirLight.shadow.camera.right = 10;
+    dirLight.shadow.camera.top = 10;
+    dirLight.shadow.camera.bottom = -10;
+
+    scene.add(dirLight);
+
+
+
+    // 7. 【モデル読み込み】Cloudflare R2のGLBをインポート
     // 【修正】ここに実際の.glbファイルへの完全なURLを入れてください
     // 例: 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb'
     const modelUrl = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/test01.glb';
@@ -73,68 +86,14 @@
     loader.load(modelUrl, function (gltf) {
       const model = gltf.scene;
 
-      // ★モデル内のメッシュとライトに影の設定を適用
-      const lights = [];
+      // ★モデル内のすべてのパーツに影の設定を適用
       model.traverse(function (node) {
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = true;
         }
-        if (node.isLight) {
-          lights.push(node);
-        }
       });
       scene.add(model);
-
-      // ★モデル全体の大きさに合わせて、ライトの影の描画範囲(シャドウカメラ)を設定する
-      // 【修正】これが無いと、範囲外の場所の影の深度計算が破綻し、画面が黒く潰れることがあります
-      const box = new THREE.Box3().setFromObject(model);
-      const sphere = box.getBoundingSphere(new THREE.Sphere());
-      const radius = Math.max(sphere.radius, 1); // 念のため最小値を確保
-
-      lights.forEach(function (light) {
-        light.castShadow = true;
-        if (!light.shadow) return;
-
-        light.shadow.mapSize.width = 2048;
-        light.shadow.mapSize.height = 2048;
-        light.shadow.bias = -0.0005;
-
-        if (light.isDirectionalLight) {
-          const cam = light.shadow.camera;
-          cam.near = 0.1;
-          cam.far = radius * 4;
-          cam.left = -radius * 1.5;
-          cam.right = radius * 1.5;
-          cam.top = radius * 1.5;
-          cam.bottom = -radius * 1.5;
-          cam.updateProjectionMatrix();
-        } else if (light.isSpotLight || light.isPointLight) {
-          light.shadow.camera.near = 0.1;
-          light.shadow.camera.far = radius * 4;
-          light.shadow.camera.updateProjectionMatrix();
-        }
-      });
-
-      // ★GLB内に「Camera」があれば、それを初期位置として使う
-      if (gltf.cameras && gltf.cameras.length > 0) {
-        const gltfCamera = gltf.cameras[0];
-
-        // 現在のウィンドウサイズに合わせてアスペクト比を更新
-        if (gltfCamera.isPerspectiveCamera) {
-          gltfCamera.aspect = window.innerWidth / window.innerHeight;
-          gltfCamera.updateProjectionMatrix();
-        }
-
-        camera = gltfCamera;
-
-        // ★カメラが差し替わったのでOrbitControlsも作り直す
-        controls.dispose();
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-      } else {
-        console.warn('GLBファイルにカメラが含まれていません。デフォルトカメラを使用します。');
-      }
     }, undefined, function (error) {
       console.error('モデルの読み込みに失敗しました:', error);
     });
