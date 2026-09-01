@@ -8,12 +8,11 @@
     canvas { display: block; width: 100vw; height: 100vh; }
   </style>
 
-  <!-- 【修正】バージョンとファイルパスまで指定した正しいURL -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        "three": "https://jsdelivr.net",
+        "three/addons/": "https://jsdelivr.net"
       }
     }
   </script>
@@ -35,15 +34,15 @@
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 3, 5);
 
-    // 3. 【レンダラー作成】★影の有効化
+    // 3. 【レンダラー作成】影の有効化
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
 
-    // ★色味の補正(three.js r150以降推奨)
+    // 色味の補正(three.js r150以降推奨)
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    // ★ここで影を有効にしています
+    // 影を有効化
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
@@ -53,46 +52,44 @@
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // 5. 【ライト設定】★影を落とす平行光源(太陽光)
+    // 5. 【ライト設定】環境光のみ配置（平行光源はGLBから読み込むため削除）
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(5, 10, 2);
-
-    // ★ライトの影を有効化
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-
-    // ★影の描画範囲(修正:未設定だとモデルサイズによって影が消えることがある)
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 50;
-    dirLight.shadow.camera.left = -10;
-    dirLight.shadow.camera.right = 10;
-    dirLight.shadow.camera.top = 10;
-    dirLight.shadow.camera.bottom = -10;
-
-    scene.add(dirLight);
-
-
-
-    // 7. 【モデル読み込み】Cloudflare R2のGLBをインポート
-    // 【修正】ここに実際の.glbファイルへの完全なURLを入れてください
-    // 例: 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb'
-    const modelUrl = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/test01.glb';
+    // 6. 【モデル読み込み】Cloudflare R2のGLBをインポート
+    const modelUrl = 'https://r2.dev';
 
     const loader = new GLTFLoader();
     loader.load(modelUrl, function (gltf) {
       const model = gltf.scene;
 
-      // ★モデル内のすべてのパーツに影の設定を適用
+      // モデル内のすべての要素（メッシュやライト）を走査して設定を適用
       model.traverse(function (node) {
+        // メッシュ（3Dオブジェクト・内蔵床）への影設定
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = true;
         }
+
+        // ★GLB内に含まれる平行光源（DirectionalLight）を見つけて影を設定
+        if (node.isDirectionalLight) {
+          node.castShadow = true;
+          node.shadow.mapSize.width = 2048;
+          node.shadow.mapSize.height = 2048;
+
+          // 影の描画範囲（モデルのサイズに合わせて調整してください）
+          node.shadow.camera.near = 0.5;
+          node.shadow.camera.far = 50;
+          node.shadow.camera.left = -10;
+          node.shadow.camera.right = 10;
+          node.shadow.camera.top = 10;
+          node.shadow.camera.bottom = -10;
+          
+          // 影が不自然にギザギザしたり欠けたりする場合の微調整用
+          node.shadow.bias = -0.0005; 
+        }
       });
+      
       scene.add(model);
     }, undefined, function (error) {
       console.error('モデルの読み込みに失敗しました:', error);
