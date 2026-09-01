@@ -7,67 +7,158 @@
     body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
     canvas { display: block; width: 100vw; height: 100vh; }
   </style>
-  <!-- Googleが支援するcdnjsサーバー。これなら100%CORSエラーは出ません -->
-  <script src="https://cloudflare.com"></script>
-  <script src="https://cloudflare.com"></script>
-  <script src="https://cloudflare.com"></script>
+
+  <!-- 【修正】バージョンとファイルパスまで指定した正しいURL -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-<script>
+<script type="module">
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
   let scene, camera, renderer, controls;
+
   function init() {
+    // 1. 【ステージ作成】3D空間を作る
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
+
+    // 2. 【カメラ設定】見え方の範囲と位置
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 3, 5);
+
+    // 3. 【レンダラー作成】★影の有効化
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+
+    // ★色味の補正(three.js r150以降推奨)
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+    // ★ここで影を有効にしています
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
     document.body.appendChild(renderer.domElement);
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    // ★環境光(IBL)を追加(修正:GLBのライトだけだと光が当たらない面が真っ黒になるため)
+    // three.jsエディターと同じ「RoomEnvironment」で全体を柔らかく照らす
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmremGenerator.dispose();
+
+    // 4. 【マウス操作】ドラッグで回転、ホイールでズーム
+    controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(5, 10, 2);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    scene.add(dirLight);
-    const floorGeo = new THREE.PlaneGeometry(20, 20);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.receiveShadow = true;
-    scene.add(floor);
-    const loader = new THREE.GLTFLoader();
-    const modelUrl = 'https://r2.dev';
+
+    // 【修正】手動のライト・床は削除しました。
+    // ライトはGLB内のもの(KHR_lights_punctual拡張)をそのまま使います。
+    // カメラもGLB内の「Camera」ノードを読み込み後に使います。
+
+    // 5. 【モデル読み込み】Cloudflare R2のGLBをインポート
+    // 【修正】ここに実際の.glbファイルへの完全なURLを入れてください
+    // 例: 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb'
+    const modelUrl = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/test01.glb';
+
+    const loader = new GLTFLoader();
     loader.load(modelUrl, function (gltf) {
       const model = gltf.scene;
+
+      // ★モデル内のメッシュとライトに影の設定を適用
+      const lights = [];
       model.traverse(function (node) {
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = true;
+
+          // ★環境光の効きを弱め、影のコントラストを保つ(0.0〜1.0で調整)
+          if (node.material) {
+            node.material.envMapIntensity = 0.4;
+          }
+        }
+        if (node.isLight) {
+          lights.push(node);
         }
       });
       scene.add(model);
+
+      // ★モデル全体の大きさに合わせて、ライトの影の描画範囲(シャドウカメラ)を設定する
+      // 【修正】これが無いと、範囲外の場所の影の深度計算が破綻し、画面が黒く潰れることがあります
+      const box = new THREE.Box3().setFromObject(model);
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      const radius = Math.max(sphere.radius, 1); // 念のため最小値を確保
+
+      lights.forEach(function (light) {
+        light.castShadow = true;
+        if (!light.shadow) return;
+
+        light.shadow.mapSize.width = 2048;
+        light.shadow.mapSize.height = 2048;
+        light.shadow.bias = -0.0005;
+
+        if (light.isDirectionalLight) {
+          const cam = light.shadow.camera;
+          cam.near = 0.1;
+          cam.far = radius * 4;
+          cam.left = -radius * 1.5;
+          cam.right = radius * 1.5;
+          cam.top = radius * 1.5;
+          cam.bottom = -radius * 1.5;
+          cam.updateProjectionMatrix();
+        } else if (light.isSpotLight || light.isPointLight) {
+          light.shadow.camera.near = 0.1;
+          light.shadow.camera.far = radius * 4;
+          light.shadow.camera.updateProjectionMatrix();
+        }
+      });
+
+      // ★GLB内に「Camera」があれば、それを初期位置として使う
+      if (gltf.cameras && gltf.cameras.length > 0) {
+        const gltfCamera = gltf.cameras[0];
+
+        // 現在のウィンドウサイズに合わせてアスペクト比を更新
+        if (gltfCamera.isPerspectiveCamera) {
+          gltfCamera.aspect = window.innerWidth / window.innerHeight;
+          gltfCamera.updateProjectionMatrix();
+        }
+
+        camera = gltfCamera;
+
+        // ★カメラが差し替わったのでOrbitControlsも作り直す
+        controls.dispose();
+        controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+      } else {
+        console.warn('GLBファイルにカメラが含まれていません。デフォルトカメラを使用します。');
+      }
     }, undefined, function (error) {
       console.error('モデルの読み込みに失敗しました:', error);
     });
+
     window.addEventListener('resize', onWindowResize);
   }
+
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
     renderer.render(scene, camera);
   }
+
   function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
+
   init();
   animate();
 </script>
