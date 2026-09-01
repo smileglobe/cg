@@ -7,23 +7,20 @@
     body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
     canvas { display: block; width: 100vw; height: 100vh; }
   </style>
-
-  <!-- 【修正】タイムアウト対策として、接続の安定した unpkg CDN に変更 -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com",
-        "three/addons/": "https://unpkg.com"
-      }
-    }
-  </script>
+  
+  <!-- ① Three.js 本体の読み込み（一番安定しているCDNサーバーに変更） -->
+  <script src="https://cloudflare.com"></script>
+  
+  <!-- ② GLBを読み込むためのプラグイン（URLの記述を完全に修正） -->
+  <script src="https://jsdelivr.net"></script>
+  
+  <!-- ③ マウス操作を可能にするプラグイン（URLの記述を完全に修正） -->
+  <script src="https://jsdelivr.net"></script>
 </head>
 <body>
-<script type="module">
-  import * as THREE from 'three';
-  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+<script>
+  // ※「type="module"」を外し、シンプルなJavaScriptとして動かします
   let scene, camera, renderer, controls;
 
   function init() {
@@ -31,66 +28,63 @@
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
 
-    // 2. 【カメラ設定】見え方の範囲と位置
+    // 2. 【カメラ設定】
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 3, 5);
 
-    // 3. 【レンダラー作成】影の有効化
+    // 3. 【レンダラー作成】★影の有効化
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-
-    // 色味の補正(three.js r150以降推奨)
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    // 影を有効化
+    
+    // ★ここでレンダラーの影を有効にします
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
+    
     document.body.appendChild(renderer.domElement);
 
     // 4. 【マウス操作】ドラッグで回転、ホイールでズーム
-    controls = new OrbitControls(camera, renderer.domElement);
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
-    // 5. 【ライト設定】環境光のみ配置（平行光源はGLBから読み込むため削除）
+    // 5. 【ライト設定】★影を落とす平行光源
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    // 6. 【モデル読み込み】Cloudflare R2のGLBをインポート
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(5, 10, 2);
+    
+    // ★ライトの影を有効化
+    dirLight.castShadow = true;
+    dirLight.shadow.mapSize.width = 2048;
+    dirLight.shadow.mapSize.height = 2048;
+    scene.add(dirLight);
+
+    // 6. 【床の設置】★影を受け止める地面
+    const floorGeo = new THREE.PlaneGeometry(20, 20);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    
+    // ★床は影を「受ける（Receive）」
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // 7. 【モデル読み込み】Cloudflare R2のGLBをインポート
+    const loader = new THREE.GLTFLoader();
     const modelUrl = 'https://r2.dev';
 
-    const loader = new GLTFLoader();
     loader.load(modelUrl, function (gltf) {
       const model = gltf.scene;
-
-      // モデル内のすべての要素（メッシュやライト）を走査して設定を適用
+      
+      // ★モデル内のすべてのパーツに影の設定を適用
       model.traverse(function (node) {
-        // メッシュ（3Dオブジェクト・内蔵床）への影設定
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = true;
         }
-
-        // ★GLB内に含まれる平行光源（DirectionalLight）を見つけて影を設定
-        if (node.isDirectionalLight) {
-          node.castShadow = true;
-          node.shadow.mapSize.width = 2048;
-          node.shadow.mapSize.height = 2048;
-
-          // 影の描画範囲（モデルのサイズに合わせて調整してください）
-          node.shadow.camera.near = 0.5;
-          node.shadow.camera.far = 50;
-          node.shadow.camera.left = -10;
-          node.shadow.camera.right = 10;
-          node.shadow.camera.top = 10;
-          node.shadow.camera.bottom = -10;
-          
-          // 影が不自然にギザギザしたり欠けたりする場合の微調整用
-          node.shadow.bias = -0.0005; 
-        }
       });
-      
+
       scene.add(model);
     }, undefined, function (error) {
       console.error('モデルの読み込みに失敗しました:', error);
@@ -114,5 +108,6 @@
   init();
   animate();
 </script>
+
 </body>
 </html>
