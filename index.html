@@ -75,16 +75,6 @@
 
     scene.add(dirLight);
 
-    // 6. 【床の設置】★影を受け止める地面
-    const floorGeo = new THREE.PlaneGeometry(20, 20);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-
-    // ★床は影を「受ける(Receive)」
-    floor.receiveShadow = true;
-    scene.add(floor);
-
     // 7. 【モデル読み込み】Cloudflare R2のGLBをインポート
     // 【修正】ここに実際の.glbファイルへの完全なURLを入れてください
     // 例: 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb'
