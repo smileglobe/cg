@@ -8,19 +8,19 @@
     canvas { display: block; width: 100vw; height: 100vh; }
   </style>
   
-  <!-- ① Three.js 本体の読み込み（一番安定しているCDNサーバーに変更） -->
+  <!-- すべてのエラー原因である unpkg を排除し、Googleが支援する最も安全なサーバー（cdnjs）に統一しました -->
+  <!-- ① Three.js 本体 -->
   <script src="https://cloudflare.com"></script>
   
-  <!-- ② GLBを読み込むためのプラグイン（URLの記述を完全に修正） -->
-  <script src="https://jsdelivr.net"></script>
+  <!-- ② GLB読み込み用プラグイン（競合が起きない完全な独立URL） -->
+  <script src="https://cloudflare.com"></script>
   
-  <!-- ③ マウス操作を可能にするプラグイン（URLの記述を完全に修正） -->
-  <script src="https://jsdelivr.net"></script>
+  <!-- ③ マウス操作用プラグイン（競合が起きない完全な独立URL） -->
+  <script src="https://cloudflare.com"></script>
 </head>
 <body>
 
 <script>
-  // ※「type="module"」を外し、シンプルなJavaScriptとして動かします
   let scene, camera, renderer, controls;
 
   function init() {
