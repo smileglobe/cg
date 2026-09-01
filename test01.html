@@ -7,12 +7,16 @@
     body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
     canvas { display: block; width: 100vw; height: 100vh; }
   </style>
-  <!-- ① Three.js 本体の読み込み -->
+  
+  <!-- 【修正】すべて jsdelivr を使わない安全なURLに変更しました -->
+  <!-- ① Three.js 本体の読み込み (Googleが支援するcdnjsより) -->
   <script src="https://cloudflare.com"></script>
-  <!-- ② GLBを読み込むための拡張プラグイン -->
-  <script src="https://jsdelivr.net"></script>
-  <!-- ③ マウス操作（ドラッグで回転など）を可能にするプラグイン -->
-  <script src="https://jsdelivr.net"></script>
+  
+  <!-- ② GLBを読み込むための拡張プラグイン (unpkgサーバーより) -->
+  <script src="https://unpkg.com"></script>
+  
+  <!-- ③ マウス操作を可能にするプラグイン (unpkgサーバーより) -->
+  <script src="https://unpkg.com"></script>
 </head>
 <body>
 
@@ -22,40 +26,33 @@
   function init() {
     // 1. 【ステージ作成】3D空間を作る
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0); // 背景を薄いグレーに
+    scene.background = new THREE.Color(0xf0f0f0);
 
-    // 2. 【カメラ設定】画角、アスペクト比、クリッピング手前・奥
+    // 2. 【カメラ設定】
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.set(0, 3, 5); // カメラの初期位置（少し上から見下ろす）
+    camera.position.set(0, 3, 5);
 
-    // 3. 【レンダラー（作画エンジン）作成】★影の有効化
+    // 3. 【レンダラー作成】★影の有効化
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     
-    // ★★★ ここで影を有効にしています ★★★
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 影の輪郭をマイルドにする
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     
     document.body.appendChild(renderer.domElement);
 
-    // 4. 【マウス操作】ドラッグで回転、ホイールでズーム
+    // 4. 【マウス操作】
     controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; // 動きになめらかな余韻を残す
+    controls.enableDamping = true;
 
     // 5. 【ライト（光源）設定】★影を落とす平行光源
-    // 全体を均等に照らす環境光（これだけだと影が出ない）
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    // 太陽のような直射光（これで影を作る）
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(5, 10, 2); // 斜め上から照らす
-    
-    // ★★★ ライトの影を有効化 ★★★
+    dirLight.position.set(5, 10, 2);
     dirLight.castShadow = true;
-    
-    // 影の解像度（数値を上げると綺麗な影になります。デフォルトは512）
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
@@ -64,9 +61,7 @@
     const floorGeo = new THREE.PlaneGeometry(20, 20);
     const floorMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 });
     const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2; // 地面として水平にする
-    
-    // ★★★ 床は影を「受ける（Receive）」設定 ★★★
+    floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     scene.add(floor);
 
@@ -77,11 +72,11 @@
     loader.load(modelUrl, function (gltf) {
       const model = gltf.scene;
       
-      // ★★★ モデル内のすべてのパーツに対して影の設定をループ処理 ★★★
+      // ★モデル内のパーツに影の設定を適用
       model.traverse(function (node) {
         if (node.isMesh) {
-          node.castShadow = true;    // 影を落とす
-          node.receiveShadow = true; // 自分自身にも影を映す
+          node.castShadow = true;
+          node.receiveShadow = true;
         }
       });
 
@@ -90,15 +85,13 @@
       console.error('モデルの読み込みに失敗しました:', error);
     });
 
-    // 画面サイズが変更されたときのレスポンシブ対応
     window.addEventListener('resize', onWindowResize);
   }
 
-  // 8. 【アニメーション（描画ループ）】パラパラマンガのように画面を更新し続ける
   function animate() {
     requestAnimationFrame(animate);
-    controls.update(); // マウス操作の更新
-    renderer.render(scene, camera); // 作画を実行
+    controls.update();
+    renderer.render(scene, camera);
   }
 
   function onWindowResize() {
@@ -107,7 +100,6 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
-  // 起動！
   init();
   animate();
 </script>
