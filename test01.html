@@ -23,6 +23,7 @@
   import * as THREE from 'three';
   import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
   import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
   let scene, camera, renderer, controls;
 
@@ -49,6 +50,12 @@
 
     document.body.appendChild(renderer.domElement);
 
+    // ★環境光(IBL)を追加(修正:GLBのライトだけだと光が当たらない面が真っ黒になるため)
+    // three.jsエディターと同じ「RoomEnvironment」で全体を柔らかく照らす
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmremGenerator.dispose();
+
     // 4. 【マウス操作】ドラッグで回転、ホイールでズーム
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -60,7 +67,7 @@
     // 5. 【モデル読み込み】Cloudflare R2のGLBをインポート
     // 【修正】ここに実際の.glbファイルへの完全なURLを入れてください
     // 例: 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb'
-    const modelUrl = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/test01.glb';
+    const modelUrl = 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb';
 
     const loader = new GLTFLoader();
     loader.load(modelUrl, function (gltf) {
