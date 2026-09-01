@@ -8,23 +8,28 @@
     canvas { display: block; width: 100vw; height: 100vh; }
   </style>
   
-  <!-- 【修正】すべて jsdelivr を使わない安全なURLに変更しました -->
-  <!-- ① Three.js 本体の読み込み (Googleが支援するcdnjsより) -->
-  <script src="https://cloudflare.com"></script>
-  
-  <!-- ② GLBを読み込むための拡張プラグイン (unpkgサーバーより) -->
-  <script src="https://unpkg.com"></script>
-  
-  <!-- ③ マウス操作を可能にするプラグイン (unpkgサーバーより) -->
-  <script src="https://unpkg.com"></script>
+  <!-- 【最重要の変更】海外の配信サーバーを使わず、GoogleのサーバーからThree.js関連の最新版をまとめて読み込みます -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://googleapis.com",
+        "three/addons/": "https://googleapis.com"
+      }
+    }
+  </script>
 </head>
 <body>
 
-<script>
+<script type="module">
+  // Googleのサーバーから安全に各機能をインポートします
+  import * as THREE from 'three';
+  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
   let scene, camera, renderer, controls;
 
   function init() {
-    // 1. 【ステージ作成】3D空間を作る
+    // 1. 【ステージ作成】
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
 
@@ -43,7 +48,7 @@
     document.body.appendChild(renderer.domElement);
 
     // 4. 【マウス操作】
-    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
 
     // 5. 【ライト（光源）設定】★影を落とす平行光源
@@ -66,7 +71,7 @@
     scene.add(floor);
 
     // 7. 【モデル読み込み】GLTF/GLBファイルのインポート
-    const loader = new THREE.GLTFLoader();
+    const loader = new GLTFLoader();
     const modelUrl = 'https://r2.dev';
 
     loader.load(modelUrl, function (gltf) {
