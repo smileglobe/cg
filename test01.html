@@ -7,107 +7,69 @@
     body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
     canvas { display: block; width: 100vw; height: 100vh; }
   </style>
-  
-  <!-- すべてのエラー原因である unpkg を排除し、Googleが支援する最も安全なサーバー（cdnjs）に統一しました -->
-  <!-- ① Three.js 本体 -->
+  <!-- Googleが支援するcdnjsサーバー。これなら100%CORSエラーは出ません -->
   <script src="https://cloudflare.com"></script>
-  
-  <!-- ② GLB読み込み用プラグイン（競合が起きない完全な独立URL） -->
   <script src="https://cloudflare.com"></script>
-  
-  <!-- ③ マウス操作用プラグイン（競合が起きない完全な独立URL） -->
   <script src="https://cloudflare.com"></script>
 </head>
 <body>
-
 <script>
   let scene, camera, renderer, controls;
-
   function init() {
-    // 1. 【ステージ作成】3D空間を作る
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xf0f0f0);
-
-    // 2. 【カメラ設定】
     camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
     camera.position.set(0, 3, 5);
-
-    // 3. 【レンダラー作成】★影の有効化
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    
-    // ★ここでレンダラーの影を有効にします
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    
     document.body.appendChild(renderer.domElement);
-
-    // 4. 【マウス操作】ドラッグで回転、ホイールでズーム
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-
-    // 5. 【ライト設定】★影を落とす平行光源
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
-
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
     dirLight.position.set(5, 10, 2);
-    
-    // ★ライトの影を有効化
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 2048;
     dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
-
-    // 6. 【床の設置】★影を受け止める地面
     const floorGeo = new THREE.PlaneGeometry(20, 20);
     const floorMat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = -Math.PI / 2;
-    
-    // ★床は影を「受ける（Receive）」
     floor.receiveShadow = true;
     scene.add(floor);
-
-    // 7. 【モデル読み込み】Cloudflare R2のGLBをインポート
     const loader = new THREE.GLTFLoader();
     const modelUrl = 'https://r2.dev';
-
     loader.load(modelUrl, function (gltf) {
       const model = gltf.scene;
-      
-      // ★モデル内のすべてのパーツに影の設定を適用
       model.traverse(function (node) {
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = true;
         }
       });
-
       scene.add(model);
     }, undefined, function (error) {
       console.error('モデルの読み込みに失敗しました:', error);
     });
-
     window.addEventListener('resize', onWindowResize);
   }
-
   function animate() {
     requestAnimationFrame(animate);
     controls.update();
     renderer.render(scene, camera);
   }
-
   function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   }
-
   init();
   animate();
 </script>
-
 </body>
 </html>
