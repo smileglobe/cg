@@ -60,28 +60,54 @@
     // 5. 【モデル読み込み】Cloudflare R2のGLBをインポート
     // 【修正】ここに実際の.glbファイルへの完全なURLを入れてください
     // 例: 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb'
-    const modelUrl = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/test01.glb';
+    const modelUrl = 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb';
 
     const loader = new GLTFLoader();
     loader.load(modelUrl, function (gltf) {
       const model = gltf.scene;
 
       // ★モデル内のメッシュとライトに影の設定を適用
+      const lights = [];
       model.traverse(function (node) {
         if (node.isMesh) {
           node.castShadow = true;
           node.receiveShadow = true;
         }
         if (node.isLight) {
-          // ★GLBに含まれるライト(Directional/Spot/Point)の影を有効化
-          node.castShadow = true;
-          if (node.shadow) {
-            node.shadow.mapSize.width = 2048;
-            node.shadow.mapSize.height = 2048;
-          }
+          lights.push(node);
         }
       });
       scene.add(model);
+
+      // ★モデル全体の大きさに合わせて、ライトの影の描画範囲(シャドウカメラ)を設定する
+      // 【修正】これが無いと、範囲外の場所の影の深度計算が破綻し、画面が黒く潰れることがあります
+      const box = new THREE.Box3().setFromObject(model);
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      const radius = Math.max(sphere.radius, 1); // 念のため最小値を確保
+
+      lights.forEach(function (light) {
+        light.castShadow = true;
+        if (!light.shadow) return;
+
+        light.shadow.mapSize.width = 2048;
+        light.shadow.mapSize.height = 2048;
+        light.shadow.bias = -0.0005;
+
+        if (light.isDirectionalLight) {
+          const cam = light.shadow.camera;
+          cam.near = 0.1;
+          cam.far = radius * 4;
+          cam.left = -radius * 1.5;
+          cam.right = radius * 1.5;
+          cam.top = radius * 1.5;
+          cam.bottom = -radius * 1.5;
+          cam.updateProjectionMatrix();
+        } else if (light.isSpotLight || light.isPointLight) {
+          light.shadow.camera.near = 0.1;
+          light.shadow.camera.far = radius * 4;
+          light.shadow.camera.updateProjectionMatrix();
+        }
+      });
 
       // ★GLB内に「Camera」があれば、それを初期位置として使う
       if (gltf.cameras && gltf.cameras.length > 0) {
