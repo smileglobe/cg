@@ -1,119 +1,1508 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
-  <meta charset="utf-8">
-  <title>Three.js GLB Viewer with Shadows</title>
-  <style>
-    body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
-    canvas { display: block; width: 100vw; height: 100vh; }
-  </style>
 
-  <!-- 【修正】バージョンとファイルパスまで指定した正しいURL -->
-  <script type="importmap">
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>GLB Material Pattern Viewer</title>
+
+
+    <!-- =====================================================
+         Import Map
+    ====================================================== -->
+
+    <script type="importmap">
+
     {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
-</head>
-<body>
-<script type="module">
-  import * as THREE from 'three';
-  import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        "imports": {
 
-  let scene, camera, renderer, controls;
+            "three":
+                "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
 
-  function init() {
-    // 1. 【ステージ作成】3D空間を作る
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
+            "three/addons/":
+                "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
 
-    // 2. 【カメラ設定】見え方の範囲と位置
-    camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.10, 800);
-    camera.position.set(30, 10, 0);
-
-    // 3. 【レンダラー作成】★影の有効化
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-
-    // ★色味の補正(three.js r150以降推奨)
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-    // ★ここで影を有効にしています
-    
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    document.body.appendChild(renderer.domElement);
-
-    // 4. 【マウス操作】ドラッグで回転、ホイールでズーム
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-
-    // 5. 【ライト設定】★影を落とす平行光源(太陽光)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    dirLight.position.set(20, 10, 6);
-
-    // ★ライトの影を有効化
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-
-    // ★影の描画範囲(修正:未設定だとモデルサイズによって影が消えることがある)
-    dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = 50;
-    dirLight.shadow.camera.left = -10;
-    dirLight.shadow.camera.right = 10;
-    dirLight.shadow.camera.top = 10;
-    dirLight.shadow.camera.bottom = -10;
-
-    scene.add(dirLight);
-
-    // 7. 【モデル読み込み】Cloudflare R2のGLBをインポート
-    // 【修正】ここに実際の.glbファイルへの完全なURLを入れてください
-    // 例: 'https://pub-xxxxxxxxxxxx.r2.dev/models/yourmodel.glb'
-    const modelUrl = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb';
-
-    const loader = new GLTFLoader();
-    loader.load(modelUrl, function (gltf) {
-      const model = gltf.scene;
-
-      // ★モデル内のすべてのパーツに影の設定を適用
-      model.traverse(function (node) {
-        if (node.isMesh) {
-          node.castShadow = true;
-          node.receiveShadow = true;
         }
-      });
-      scene.add(model);
-    }, undefined, function (error) {
-      console.error('モデルの読み込みに失敗しました:', error);
+    }
+
+    </script>
+
+
+    <!-- =====================================================
+         CSS
+    ====================================================== -->
+
+    <style>
+
+        html,
+        body {
+
+            margin: 0;
+            padding: 0;
+
+            width: 100%;
+            height: 100%;
+
+            overflow: hidden;
+
+            background: #eeeeee;
+
+        }
+
+
+        canvas {
+
+            display: block;
+
+        }
+
+
+        /* =================================================
+           Loading
+        ================================================= */
+
+        #loading {
+
+            position: fixed;
+
+            left: 50%;
+            top: 50%;
+
+            transform:
+                translate(-50%, -50%);
+
+            padding: 15px 25px;
+
+            background:
+                rgba(0, 0, 0, 0.75);
+
+            color: white;
+
+            font-family:
+                Arial,
+                sans-serif;
+
+            font-size: 14px;
+
+            border-radius: 6px;
+
+            z-index: 1000;
+
+        }
+
+
+        /* =================================================
+           UI
+        ================================================= */
+
+        #ui {
+
+            position: fixed;
+
+            top: 20px;
+            right: 20px;
+
+            width: 220px;
+
+            padding: 18px;
+
+            background:
+                rgba(255, 255, 255, 0.95);
+
+            border-radius: 10px;
+
+            box-shadow:
+                0 3px 15px
+                rgba(0, 0, 0, 0.2);
+
+            font-family:
+                Arial,
+                sans-serif;
+
+            z-index: 100;
+
+        }
+
+
+        #ui-title {
+
+            font-size: 16px;
+
+            font-weight: bold;
+
+            margin-bottom: 15px;
+
+        }
+
+
+        #ui label {
+
+            display: block;
+
+            margin-bottom: 6px;
+
+            font-size: 13px;
+
+            color: #333333;
+
+        }
+
+
+        #wallPattern {
+
+            width: 100%;
+
+            padding: 9px;
+
+            border:
+                1px solid #cccccc;
+
+            border-radius: 5px;
+
+            background: white;
+
+            font-size: 14px;
+
+            cursor: pointer;
+
+        }
+
+
+        /* =================================================
+           Status
+        ================================================= */
+
+        #status {
+
+            margin-top: 12px;
+
+            padding-top: 10px;
+
+            border-top:
+                1px solid #dddddd;
+
+            font-size: 11px;
+
+            line-height: 1.5;
+
+            color: #666666;
+
+        }
+
+
+        /* =================================================
+           Camera Reset
+        ================================================= */
+
+        #resetCamera {
+
+            width: 100%;
+
+            margin-top: 12px;
+
+            padding: 8px;
+
+            border: none;
+
+            border-radius: 5px;
+
+            background: #333333;
+
+            color: white;
+
+            cursor: pointer;
+
+        }
+
+
+        #resetCamera:hover {
+
+            background: #555555;
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<!-- =====================================================
+     Loading
+====================================================== -->
+
+<div id="loading">
+
+    GLB Loading...
+
+</div>
+
+
+<!-- =====================================================
+     UI
+====================================================== -->
+
+<div id="ui">
+
+    <div id="ui-title">
+
+        建築3Dビューアー
+
+    </div>
+
+
+    <label for="wallPattern">
+
+        外壁パターン
+
+    </label>
+
+
+    <select id="wallPattern">
+
+        <option value="A">
+
+            パターンA
+
+        </option>
+
+        <option value="B">
+
+            パターンB
+
+        </option>
+
+    </select>
+
+
+    <button id="resetCamera">
+
+        カメラリセット
+
+    </button>
+
+
+    <div id="status">
+
+        GLB Loading...
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     JavaScript
+====================================================== -->
+
+<script type="module">
+
+
+// ============================================================
+// Three.js
+// ============================================================
+
+import * as THREE from 'three';
+
+
+// ============================================================
+// OrbitControls
+// ============================================================
+
+import { OrbitControls } from
+    'three/addons/controls/OrbitControls.js';
+
+
+// ============================================================
+// GLTFLoader
+// ============================================================
+
+import { GLTFLoader } from
+    'three/addons/loaders/GLTFLoader.js';
+
+
+// ============================================================
+// 1. GLB URL
+// ============================================================
+
+const modelUrl =
+    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb';
+
+
+// ============================================================
+// 2. Texture URL
+// ============================================================
+
+const textureBaseUrl =
+    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/textures/';
+
+
+// ============================================================
+// 3. Textureファイル
+// ============================================================
+
+const textureUrls = {
+
+    A1:
+        textureBaseUrl +
+        'wall_A_01.jpg',
+
+    A2:
+        textureBaseUrl +
+        'wall_A_02.jpg',
+
+    B1:
+        textureBaseUrl +
+        'wall_B_01.jpg',
+
+    B2:
+        textureBaseUrl +
+        'wall_B_02.jpg'
+
+};
+
+
+// ============================================================
+// 4. Scene
+// ============================================================
+
+const scene =
+    new THREE.Scene();
+
+
+scene.background =
+    new THREE.Color(
+        0xeeeeee
+    );
+
+
+// ============================================================
+// 5. Camera
+// ============================================================
+
+const camera =
+    new THREE.PerspectiveCamera(
+
+        45,
+
+        window.innerWidth /
+        window.innerHeight,
+
+        0.1,
+
+        10000
+
+    );
+
+
+camera.position.set(
+
+    10,
+    8,
+    10
+
+);
+
+
+// ============================================================
+// 6. Renderer
+// ============================================================
+
+const renderer =
+    new THREE.WebGLRenderer({
+
+        antialias: true
+
     });
 
-    window.addEventListener('resize', onWindowResize);
-  }
 
-  function animate() {
-    requestAnimationFrame(animate);
+renderer.setSize(
+
+    window.innerWidth,
+    window.innerHeight
+
+);
+
+
+renderer.setPixelRatio(
+
+    Math.min(
+
+        window.devicePixelRatio,
+        2
+
+    )
+
+);
+
+
+// ============================================================
+// Shadow
+// ============================================================
+
+renderer.shadowMap.enabled =
+    true;
+
+
+renderer.shadowMap.type =
+    THREE.PCFSoftShadowMap;
+
+
+// ============================================================
+// Color Management
+// ============================================================
+
+renderer.outputColorSpace =
+    THREE.SRGBColorSpace;
+
+
+// ============================================================
+// Tone Mapping
+// ============================================================
+
+renderer.toneMapping =
+    THREE.ACESFilmicToneMapping;
+
+
+renderer.toneMappingExposure =
+    1.0;
+
+
+// ============================================================
+// Canvas
+// ============================================================
+
+document.body.appendChild(
+
+    renderer.domElement
+
+);
+
+
+// ============================================================
+// 7. Ambient Light
+// ============================================================
+
+const ambientLight =
+    new THREE.AmbientLight(
+
+        0xffffff,
+
+        0.5
+
+    );
+
+
+scene.add(
+
+    ambientLight
+
+);
+
+
+// ============================================================
+// 8. Directional Light
+// ============================================================
+
+const dirLight =
+    new THREE.DirectionalLight(
+
+        0xffffff,
+
+        2.0
+
+    );
+
+
+dirLight.position.set(
+
+    20,
+    20,
+    10
+
+);
+
+
+// Shadow
+dirLight.castShadow =
+    true;
+
+
+// ============================================================
+// Shadow Map
+// ============================================================
+
+dirLight.shadow.mapSize.width =
+    2048;
+
+dirLight.shadow.mapSize.height =
+    2048;
+
+
+// ============================================================
+// Shadow Camera
+// ============================================================
+
+dirLight.shadow.camera.near =
+    0.1;
+
+dirLight.shadow.camera.far =
+    200;
+
+dirLight.shadow.camera.left =
+    -50;
+
+dirLight.shadow.camera.right =
+    50;
+
+dirLight.shadow.camera.top =
+    50;
+
+dirLight.shadow.camera.bottom =
+    -50;
+
+
+// ============================================================
+// Shadow Bias
+// ============================================================
+
+dirLight.shadow.bias =
+    -0.0001;
+
+
+scene.add(
+
+    dirLight
+
+);
+
+
+scene.add(
+
+    dirLight.target
+
+);
+
+
+// ============================================================
+// 9. OrbitControls
+// ============================================================
+
+const controls =
+    new OrbitControls(
+
+        camera,
+        renderer.domElement
+
+    );
+
+
+controls.enableDamping =
+    true;
+
+
+controls.dampingFactor =
+    0.05;
+
+
+// ============================================================
+// 10. GLTF Loader
+// ============================================================
+
+const loader =
+    new GLTFLoader();
+
+
+// ============================================================
+// 11. Texture Loader
+// ============================================================
+
+const textureLoader =
+    new THREE.TextureLoader();
+
+
+// ============================================================
+// 12. 壁Mesh保存
+// ============================================================
+
+let wallMesh1 = null;
+
+let wallMesh2 = null;
+
+
+// ============================================================
+// 13. モデル情報
+// ============================================================
+
+let modelCenter = null;
+
+let modelSize = null;
+
+let loadedModel = null;
+
+
+// ============================================================
+// 14. Texture
+// ============================================================
+
+const textures = {
+
+    A1: null,
+    A2: null,
+    B1: null,
+    B2: null
+
+};
+
+
+// ============================================================
+// 15. Texture Loading
+// ============================================================
+
+function loadTexture(
+    url
+) {
+
+    return new Promise(
+
+        function(resolve, reject) {
+
+
+            textureLoader.load(
+
+                url,
+
+
+                function(texture) {
+
+
+                    // GLBのUVを使用
+                    texture.colorSpace =
+                        THREE.SRGBColorSpace;
+
+
+                    // テクスチャを繰り返さない
+                    texture.wrapS =
+                        THREE.ClampToEdgeWrapping;
+
+                    texture.wrapT =
+                        THREE.ClampToEdgeWrapping;
+
+
+                    texture.needsUpdate =
+                        true;
+
+
+                    resolve(texture);
+
+                },
+
+
+                undefined,
+
+
+                function(error) {
+
+
+                    console.error(
+
+                        'Texture Load Error:',
+                        url,
+                        error
+
+                    );
+
+
+                    reject(error);
+
+                }
+
+            );
+
+        }
+
+    );
+
+}
+
+
+// ============================================================
+// 16. 全テクスチャ読み込み
+// ============================================================
+
+async function loadTextures() {
+
+
+    console.log(
+        'Loading textures...'
+    );
+
+
+    textures.A1 =
+        await loadTexture(
+            textureUrls.A1
+        );
+
+
+    textures.A2 =
+        await loadTexture(
+            textureUrls.A2
+        );
+
+
+    textures.B1 =
+        await loadTexture(
+            textureUrls.B1
+        );
+
+
+    textures.B2 =
+        await loadTexture(
+            textureUrls.B2
+        );
+
+
+    console.log(
+        'All textures loaded.'
+    );
+
+}
+
+
+// ============================================================
+// 17. GLB Loading
+// ============================================================
+
+async function loadModel() {
+
+
+    try {
+
+
+        // ----------------------------------------------------
+        // Texture読み込み
+        // ----------------------------------------------------
+
+        await loadTextures();
+
+
+        // ----------------------------------------------------
+        // GLB読み込み
+        // ----------------------------------------------------
+
+        loader.load(
+
+            modelUrl,
+
+
+            // =================================================
+            // SUCCESS
+            // =================================================
+
+            function(gltf) {
+
+
+                console.log(
+                    '================================'
+                );
+
+                console.log(
+                    'GLB LOAD SUCCESS'
+                );
+
+                console.log(
+                    '================================'
+                );
+
+
+                loadedModel =
+                    gltf.scene;
+
+
+                // =================================================
+                // Mesh確認
+                // =================================================
+
+                loadedModel.traverse(
+
+                    function(object) {
+
+
+                        if (
+                            !object.isMesh
+                        ) {
+
+                            return;
+
+                        }
+
+
+                        // -----------------------------------------
+                        // Shadow
+                        // -----------------------------------------
+
+                        object.castShadow =
+                            true;
+
+
+                        object.receiveShadow =
+                            true;
+
+
+                        // -----------------------------------------
+                        // Mesh情報
+                        // -----------------------------------------
+
+                        console.log(
+                            'Mesh:',
+                            object.name
+                        );
+
+
+                        // -----------------------------------------
+                        // Material情報
+                        // -----------------------------------------
+
+                        if (
+                            object.material
+                        ) {
+
+
+                            console.log(
+
+                                'Material:',
+                                object.material.name
+
+                            );
+
+
+                            // =================================================
+                            // ★ 壁Meshの指定
+                            // =================================================
+
+                            /*
+                             *
+                             * ここをGLBの実際のMaterial名に変更してください。
+                             *
+                             * 例：
+                             *
+                             * if (object.material.name === 'Wall_01')
+                             *
+                             */
+
+
+                            if (
+                                object.material.name ===
+                                'Wall_01'
+                            ) {
+
+                                wallMesh1 =
+                                    object;
+
+                            }
+
+
+                            if (
+                                object.material.name ===
+                                'Wall_02'
+                            ) {
+
+                                wallMesh2 =
+                                    object;
+
+                            }
+
+                        }
+
+                    }
+
+                );
+
+
+                // =================================================
+                // Scene
+                // =================================================
+
+                scene.add(
+
+                    loadedModel
+
+                );
+
+
+                // =================================================
+                // Bounding Box
+                // =================================================
+
+                const box =
+                    new THREE.Box3()
+                        .setFromObject(
+                            loadedModel
+                        );
+
+
+                const size =
+                    box.getSize(
+
+                        new THREE.Vector3()
+
+                    );
+
+
+                const center =
+                    box.getCenter(
+
+                        new THREE.Vector3()
+
+                    );
+
+
+                modelCenter =
+                    center.clone();
+
+
+                modelSize =
+                    Math.max(
+
+                        size.x,
+                        size.y,
+                        size.z
+
+                    );
+
+
+                console.log(
+                    'Model Size:',
+                    size
+                );
+
+
+                console.log(
+                    'Model Center:',
+                    center
+                );
+
+
+                // =================================================
+                // Camera
+                // =================================================
+
+                const distance =
+                    modelSize * 2;
+
+
+                camera.position.set(
+
+                    center.x + distance,
+
+                    center.y +
+                    distance * 0.7,
+
+                    center.z + distance
+
+                );
+
+
+                camera.near =
+                    Math.max(
+
+                        modelSize / 1000,
+                        0.01
+
+                    );
+
+
+                camera.far =
+                    modelSize * 100;
+
+
+                camera.updateProjectionMatrix();
+
+
+                // =================================================
+                // Controls
+                // =================================================
+
+                controls.target.copy(
+
+                    center
+
+                );
+
+
+                controls.update();
+
+
+                // =================================================
+                // Light Target
+                // =================================================
+
+                dirLight.target.position.copy(
+
+                    center
+
+                );
+
+
+                // =================================================
+                // Shadow Camera
+                // =================================================
+
+                const shadowSize =
+                    Math.max(
+
+                        modelSize * 1.5,
+                        10
+
+                    );
+
+
+                dirLight.shadow.camera.left =
+                    -shadowSize;
+
+
+                dirLight.shadow.camera.right =
+                    shadowSize;
+
+
+                dirLight.shadow.camera.top =
+                    shadowSize;
+
+
+                dirLight.shadow.camera.bottom =
+                    -shadowSize;
+
+
+                dirLight.shadow.camera.far =
+                    Math.max(
+
+                        modelSize * 5,
+                        50
+
+                    );
+
+
+                dirLight.shadow.camera.updateProjectionMatrix();
+
+
+                // =================================================
+                // 最初はパターンA
+                // =================================================
+
+                setWallPattern('A');
+
+
+                // =================================================
+                // Loading終了
+                // =================================================
+
+                document.getElementById(
+                    'loading'
+                ).style.display =
+                    'none';
+
+
+                document.getElementById(
+                    'status'
+                ).textContent =
+                    'GLB読み込み完了';
+
+
+            },
+
+
+            // =================================================
+            // PROGRESS
+            // =================================================
+
+            function(xhr) {
+
+
+                if (
+                    xhr.total > 0
+                ) {
+
+
+                    const percent =
+                        xhr.loaded /
+                        xhr.total *
+                        100;
+
+
+                    document.getElementById(
+                        'loading'
+                    ).textContent =
+
+                        'GLB Loading... ' +
+                        percent.toFixed(1) +
+                        '%';
+
+
+                }
+
+            },
+
+
+            // =================================================
+            // ERROR
+            // =================================================
+
+            function(error) {
+
+
+                console.error(
+                    'GLB LOAD ERROR:',
+                    error
+                );
+
+
+                document.getElementById(
+                    'loading'
+                ).textContent =
+                    'GLB LOAD ERROR';
+
+
+                document.getElementById(
+                    'status'
+                ).textContent =
+                    'GLBの読み込みに失敗しました';
+
+
+            }
+
+        );
+
+
+    }
+
+    catch(error) {
+
+
+        console.error(
+            'Texture loading error:',
+            error
+        );
+
+
+        document.getElementById(
+            'loading'
+        ).textContent =
+            'Texture LOAD ERROR';
+
+
+        document.getElementById(
+            'status'
+        ).textContent =
+            'テクスチャの読み込みに失敗しました';
+
+    }
+
+}
+
+
+// ============================================================
+// 18. 壁テクスチャ変更
+// ============================================================
+
+function changeWallTexture(
+
+    mesh,
+    texture
+
+) {
+
+
+    if (
+        !mesh
+    ) {
+
+        return;
+
+    }
+
+
+    if (
+        !mesh.material
+    ) {
+
+        return;
+
+    }
+
+
+    // ------------------------------------------
+    // テクスチャ変更
+    // ------------------------------------------
+
+    mesh.material.map =
+        texture;
+
+
+    // ------------------------------------------
+    // 色補正
+    // ------------------------------------------
+
+    texture.colorSpace =
+        THREE.SRGBColorSpace;
+
+
+    // ------------------------------------------
+    // Material更新
+    // ------------------------------------------
+
+    mesh.material.needsUpdate =
+        true;
+
+}
+
+
+// ============================================================
+// 19. パターン変更
+// ============================================================
+
+function setWallPattern(
+
+    pattern
+
+) {
+
+
+    console.log(
+        'Change Pattern:',
+        pattern
+    );
+
+
+    // ========================================================
+    // Pattern A
+    // ========================================================
+
+    if (
+        pattern === 'A'
+    ) {
+
+
+        changeWallTexture(
+
+            wallMesh1,
+            textures.A1
+
+        );
+
+
+        changeWallTexture(
+
+            wallMesh2,
+            textures.A2
+
+        );
+
+
+    }
+
+
+    // ========================================================
+    // Pattern B
+    // ========================================================
+
+    if (
+        pattern === 'B'
+    ) {
+
+
+        changeWallTexture(
+
+            wallMesh1,
+            textures.B1
+
+        );
+
+
+        changeWallTexture(
+
+            wallMesh2,
+            textures.B2
+
+        );
+
+
+    }
+
+
+    // ========================================================
+    // Status
+    // ========================================================
+
+    document.getElementById(
+        'status'
+    ).textContent =
+
+        '現在の外壁：パターン' +
+        pattern;
+
+}
+
+
+// ============================================================
+// 20. パターン選択
+// ============================================================
+
+document.getElementById(
+
+    'wallPattern'
+
+).addEventListener(
+
+    'change',
+
+    function() {
+
+
+        setWallPattern(
+
+            this.value
+
+        );
+
+    }
+
+);
+
+
+// ============================================================
+// 21. Camera Reset
+// ============================================================
+
+document.getElementById(
+
+    'resetCamera'
+
+).addEventListener(
+
+    'click',
+
+    function() {
+
+
+        if (
+            !modelCenter ||
+            !modelSize
+        ) {
+
+            return;
+
+        }
+
+
+        const distance =
+            modelSize * 2;
+
+
+        camera.position.set(
+
+            modelCenter.x +
+            distance,
+
+            modelCenter.y +
+            distance * 0.7,
+
+            modelCenter.z +
+            distance
+
+        );
+
+
+        controls.target.copy(
+
+            modelCenter
+
+        );
+
+
+        controls.update();
+
+    }
+
+);
+
+
+// ============================================================
+// 22. Window Resize
+// ============================================================
+
+window.addEventListener(
+
+    'resize',
+
+    function() {
+
+
+        camera.aspect =
+
+            window.innerWidth /
+            window.innerHeight;
+
+
+        camera.updateProjectionMatrix();
+
+
+        renderer.setSize(
+
+            window.innerWidth,
+            window.innerHeight
+
+        );
+
+    }
+
+);
+
+
+// ============================================================
+// 23. Animation
+// ============================================================
+
+function animate() {
+
+
+    requestAnimationFrame(
+
+        animate
+
+    );
+
+
     controls.update();
-    renderer.render(scene, camera);
-  }
 
-  function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  }
 
-  init();
-  animate();
+    renderer.render(
+
+        scene,
+        camera
+
+    );
+
+}
+
+
+// ============================================================
+// 24. Start
+// ============================================================
+
+animate();
+
+loadModel();
+
+
 </script>
+
+
 </body>
+
 </html>
