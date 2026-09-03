@@ -1,4 +1,4 @@
-# Three.js GLB Viewer ― Shadow対応 完全版
+# Three.js + Cloudflare R2 GLB Viewer 完全版
 
 ```html
 <!DOCTYPE html>
@@ -13,48 +13,153 @@
 
     <title>GLB Viewer</title>
 
+
     <style>
+
+        /* =====================================================
+           基本
+        ===================================================== */
 
         html,
         body {
+
             margin: 0;
             padding: 0;
+
             width: 100%;
             height: 100%;
+
             overflow: hidden;
+
+            background: #eeeeee;
+
         }
 
-        body {
-            background: #eeeeee;
-        }
 
         canvas {
+
             display: block;
+
         }
 
-        /* --------------------------------
-           Loading表示
-        -------------------------------- */
+
+        /* =====================================================
+           Loading
+        ===================================================== */
 
         #loading {
+
             position: fixed;
+
             left: 50%;
             top: 50%;
 
-            transform: translate(-50%, -50%);
+            transform:
+                translate(-50%, -50%);
 
-            padding: 15px 25px;
+            padding:
+                15px 25px;
 
-            background: rgba(0, 0, 0, 0.7);
+            background:
+                rgba(0, 0, 0, 0.75);
+
             color: white;
 
-            font-family: sans-serif;
+            font-family:
+                Arial,
+                sans-serif;
+
             font-size: 14px;
 
-            border-radius: 5px;
+            border-radius: 6px;
+
+            z-index: 1000;
+
+        }
+
+
+        /* =====================================================
+           エラー表示
+        ===================================================== */
+
+        #error {
+
+            display: none;
+
+            position: fixed;
+
+            left: 50%;
+            top: 50%;
+
+            transform:
+                translate(-50%, -50%);
+
+            padding:
+                20px 30px;
+
+            max-width: 600px;
+
+            background:
+                rgba(180, 0, 0, 0.9);
+
+            color: white;
+
+            font-family:
+                Arial,
+                sans-serif;
+
+            font-size: 14px;
+
+            line-height: 1.6;
+
+            border-radius: 6px;
+
+            z-index: 1001;
+
+        }
+
+
+        /* =====================================================
+           UI
+        ===================================================== */
+
+        #ui {
+
+            position: fixed;
+
+            top: 20px;
+            left: 20px;
+
+            padding: 15px;
+
+            background:
+                rgba(255, 255, 255, 0.9);
+
+            border-radius: 8px;
+
+            font-family:
+                Arial,
+                sans-serif;
+
+            font-size: 13px;
 
             z-index: 100;
+
         }
+
+
+        #ui button {
+
+            margin-top: 5px;
+            margin-right: 5px;
+
+            padding:
+                7px 12px;
+
+            cursor: pointer;
+
+        }
+
 
     </style>
 
@@ -64,10 +169,58 @@
 <body>
 
 
+<!-- =========================================================
+     Loading
+========================================================= -->
+
 <div id="loading">
+
     GLB Loading...
+
 </div>
 
+
+<!-- =========================================================
+     Error
+========================================================= -->
+
+<div id="error">
+
+    GLBの読み込みに失敗しました。
+
+</div>
+
+
+<!-- =========================================================
+     UI
+========================================================= -->
+
+<div id="ui">
+
+    <strong>GLB Viewer</strong>
+
+    <br><br>
+
+    <button id="resetCamera">
+        カメラリセット
+    </button>
+
+    <button id="shadowButton">
+        Shadow Camera
+    </button>
+
+    <br>
+
+    <button id="lightButton">
+        Light ON / OFF
+    </button>
+
+</div>
+
+
+<!-- =========================================================
+     Three.js
+========================================================= -->
 
 <script type="module">
 
@@ -97,19 +250,29 @@ import { GLTFLoader } from
 
 
 // ============================================================
-// 1. Scene
-// =======================================================
+// 1. GLB URL
+// ============================================================
 
-const scene = new THREE.Scene();
-
-
-// 背景色
-scene.background =
-    new THREE.Color(0xeeee
+const modelUrl =
+    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb';
 
 
 // ============================================================
-// 2. Camera
+// 2. Scene
+// ============================================================
+
+const scene =
+    new THREE.Scene();
+
+
+scene.background =
+    new THREE.Color(
+        0xeeeeee
+    );
+
+
+// ============================================================
+// 3. Camera
 // ============================================================
 
 const camera =
@@ -122,21 +285,22 @@ const camera =
 
         0.1,
 
-        1000
+        10000
 
     );
 
 
-// 仮のカメラ位置
 camera.position.set(
+
     10,
     8,
     10
+
 );
 
 
 // ============================================================
-// 3. Renderer
+// 4. Renderer
 // ============================================================
 
 const renderer =
@@ -160,56 +324,62 @@ renderer.setSize(
 renderer.setPixelRatio(
 
     Math.min(
+
         window.devicePixelRatio,
         2
+
     )
 
 );
 
 
-// ------------------------------------------------------------
-// ★ Shadowを有効化
-// ------------------------------------------------------------
+// ============================================================
+// ★ Shadow
+// ============================================================
 
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled =
+    true;
 
 
-// Shadowの種類
 renderer.shadowMap.type =
     THREE.PCFSoftShadowMap;
 
 
-// ------------------------------------------------------------
+// ============================================================
 // ★ Color Management
-// ------------------------------------------------------------
+// ============================================================
 
 renderer.outputColorSpace =
     THREE.SRGBColorSpace;
 
 
-// ------------------------------------------------------------
+// ============================================================
 // ★ Tone Mapping
-// ------------------------------------------------------------
+// ============================================================
 
 renderer.toneMapping =
     THREE.ACESFilmicToneMapping;
 
 
-// 明るさ
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure =
+    1.0;
 
 
-// CanvasをHTMLに追加
+// ============================================================
+// Canvas
+// ============================================================
+
 document.body.appendChild(
+
     renderer.domElement
+
 );
 
 
 // ============================================================
-// 4. Ambient Light
+// 5. Ambient Light
 // ============================================================
 
-// 全体を照らす環境光
 const ambientLight =
     new THREE.AmbientLight(
 
@@ -219,13 +389,16 @@ const ambientLight =
 
     );
 
+
 scene.add(
+
     ambientLight
+
 );
 
 
 // ============================================================
-// 5. Directional Light
+// 6. Directional Light
 // ============================================================
 
 // 太陽光
@@ -239,10 +412,7 @@ const dirLight =
     );
 
 
-// ------------------------------------------------------------
 // 光源位置
-// ------------------------------------------------------------
-
 dirLight.position.set(
 
     20,
@@ -252,41 +422,15 @@ dirLight.position.set(
 );
 
 
-// ------------------------------------------------------------
-// 建物の中心へ向ける
-// ------------------------------------------------------------
-
-dirLight.target.position.set(
-
-    0,
-    0,
-    0
-
-);
-
-
-// Sceneに追加
-scene.add(
-    dirLight
-);
-
-scene.add(
-    dirLight.target
-);
-
-
 // ============================================================
-// 6. Shadow
+// Shadow
 // ============================================================
 
-// ★ DirectionalLightで影を作る
-dirLight.castShadow = true;
+dirLight.castShadow =
+    true;
 
 
-// ------------------------------------------------------------
 // Shadow Map解像度
-// ------------------------------------------------------------
-
 dirLight.shadow.mapSize.width =
     2048;
 
@@ -294,51 +438,66 @@ dirLight.shadow.mapSize.height =
     2048;
 
 
-// ------------------------------------------------------------
+// ============================================================
 // Shadow Camera
-// ------------------------------------------------------------
+// ============================================================
 
 dirLight.shadow.camera.near =
     0.1;
+
 
 dirLight.shadow.camera.far =
     200;
 
 
-// 左右
 dirLight.shadow.camera.left =
     -50;
+
 
 dirLight.shadow.camera.right =
     50;
 
 
-// 上下
 dirLight.shadow.camera.top =
     50;
+
 
 dirLight.shadow.camera.bottom =
     -50;
 
 
-// ------------------------------------------------------------
+// ============================================================
 // Shadow Bias
-// ------------------------------------------------------------
+// ============================================================
 
-// Shadow Acne対策
 dirLight.shadow.bias =
     -0.0001;
+
+
+// Sceneに追加
+scene.add(
+
+    dirLight
+
+);
+
+
+// ============================================================
+// Light Target
+// ============================================================
+
+scene.add(
+
+    dirLight.target
+
+);
 
 
 // ============================================================
 // 7. Shadow Camera Helper
 // ============================================================
 
-// ★ Shadow範囲確認用
-//
-// 問題が解決したらコメントアウトしてOK
-//
-
+// 最初は非表示
 const shadowHelper =
     new THREE.CameraHelper(
 
@@ -347,7 +506,15 @@ const shadowHelper =
     );
 
 
-// scene.add(shadowHelper);
+shadowHelper.visible =
+    false;
+
+
+scene.add(
+
+    shadowHelper
+
+);
 
 
 // ============================================================
@@ -363,41 +530,48 @@ const controls =
     );
 
 
-// 滑らかな操作
-controls.enableDamping = true;
+controls.enableDamping =
+    true;
 
 
-// damping量
 controls.dampingFactor =
     0.05;
 
 
 // ============================================================
-// 9. GLB Loader
+// 9. GLTF Loader
 // ============================================================
 
 const loader =
     new GLTFLoader();
 
 
+// ============================================================
+// 10. GLB読み込み
+// ============================================================
+
 loader.load(
 
-    // --------------------------------------------------------
-    // ★ GLBファイル
-    // --------------------------------------------------------
-
-    'model/house.glb',
+    modelUrl,
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // 読み込み成功
-    // --------------------------------------------------------
+    // ========================================================
 
     function (gltf) {
 
 
         console.log(
-            'GLB loaded'
+            '================================'
+        );
+
+        console.log(
+            'GLB Loaded'
+        );
+
+        console.log(
+            '================================'
         );
 
 
@@ -406,7 +580,17 @@ loader.load(
 
 
         // ====================================================
-        // 10. GLBのMesh設定
+        // GLB情報
+        // ====================================================
+
+        console.log(
+            'Scene:',
+            model
+        );
+
+
+        // ====================================================
+        // 11. GLB Mesh設定
         // ====================================================
 
         model.traverse(
@@ -423,31 +607,36 @@ loader.load(
                     // ★ 影を落とす
                     // ----------------------------------------
 
-                    object.castShadow = true;
+                    object.castShadow =
+                        true;
 
 
                     // ----------------------------------------
                     // ★ 影を受ける
                     // ----------------------------------------
 
-                    object.receiveShadow = true;
+                    object.receiveShadow =
+                        true;
 
 
                     // ----------------------------------------
-                    // デバッグ
+                    // Mesh名
                     // ----------------------------------------
 
                     console.log(
-
                         'Mesh:',
                         object.name
-
                     );
 
+
+                    // ----------------------------------------
+                    // Material情報
+                    // ----------------------------------------
 
                     if (
                         object.material
                     ) {
+
 
                         console.log(
 
@@ -455,6 +644,34 @@ loader.load(
                             object.material.name
 
                         );
+
+
+                        // ====================================
+                        // PBR Material確認
+                        // ====================================
+
+                        if (
+                            object.material.isMeshStandardMaterial ||
+                            object.material.isMeshPhysicalMaterial
+                        ) {
+
+
+                            console.log(
+
+                                'Metalness:',
+                                object.material.metalness
+
+                            );
+
+
+                            console.log(
+
+                                'Roughness:',
+                                object.material.roughness
+
+                            );
+
+                        }
 
                     }
 
@@ -466,27 +683,42 @@ loader.load(
 
 
         // ====================================================
-        // 11. GLBをSceneへ追加
+        // 12. Sceneへ追加
         // ====================================================
 
         scene.add(
+
             model
+
         );
 
 
         // ====================================================
-        // 12. GLBの大きさを取得
+        // 13. モデルのBounding Box
         // ====================================================
 
         const box =
             new THREE.Box3()
-                .setFromObject(model);
+                .setFromObject(
+                    model
+                );
 
 
-        // 建物サイズ
+        // モデルサイズ
         const size =
             box.getSize(
+
                 new THREE.Vector3()
+
+            );
+
+
+        // モデル中心
+        const center =
+            box.getCenter(
+
+                new THREE.Vector3()
+
             );
 
 
@@ -496,16 +728,6 @@ loader.load(
         );
 
 
-        // ====================================================
-        // 13. 建物中心
-        // ====================================================
-
-        const center =
-            box.getCenter(
-                new THREE.Vector3()
-            );
-
-
         console.log(
             'Model Center:',
             center
@@ -513,7 +735,7 @@ loader.load(
 
 
         // ====================================================
-        // 14. Camera自動設定
+        // 14. モデル最大サイズ
         // ====================================================
 
         const maxSize =
@@ -526,11 +748,14 @@ loader.load(
             );
 
 
+        // ====================================================
+        // 15. カメラ距離
+        // ====================================================
+
         const distance =
             maxSize * 2.0;
 
 
-        // カメラ位置
         camera.position.set(
 
             center.x + distance,
@@ -541,11 +766,16 @@ loader.load(
 
 
         // ====================================================
-        // 15. Camera Near / Far
+        // 16. Camera設定
         // ====================================================
 
         camera.near =
-            maxSize / 1000;
+            Math.max(
+
+                maxSize / 1000,
+                0.01
+
+            );
 
 
         camera.far =
@@ -556,11 +786,13 @@ loader.load(
 
 
         // ====================================================
-        // 16. OrbitControlsの中心
+        // 17. OrbitControls
         // ====================================================
 
         controls.target.copy(
+
             center
+
         );
 
 
@@ -568,20 +800,27 @@ loader.load(
 
 
         // ====================================================
-        // 17. DirectionalLightを建物に合わせる
+        // 18. DirectionalLightを建物に向ける
         // ====================================================
 
         dirLight.target.position.copy(
+
             center
+
         );
 
 
         // ====================================================
-        // 18. Shadow Cameraを建物サイズに合わせる
+        // 19. Shadow Camera自動調整
         // ====================================================
 
         const shadowSize =
-            maxSize * 1.5;
+            Math.max(
+
+                maxSize * 1.5,
+                10
+
+            );
 
 
         dirLight.shadow.camera.left =
@@ -601,38 +840,132 @@ loader.load(
 
 
         dirLight.shadow.camera.far =
-            maxSize * 5;
+            Math.max(
+
+                maxSize * 5,
+                50
+
+            );
 
 
         dirLight.shadow.camera.updateProjectionMatrix();
 
 
+        // ShadowHelper更新
+        shadowHelper.update();
+
+
         // ====================================================
-        // 19. Loading表示を消す
+        // 20. Ground Plane
+        // ====================================================
+
+        // 建物の下に影を受ける地面を作る
+        const groundSize =
+            Math.max(
+
+                maxSize * 5,
+                100
+
+            );
+
+
+        const groundGeometry =
+            new THREE.PlaneGeometry(
+
+                groundSize,
+                groundSize
+
+            );
+
+
+        const groundMaterial =
+            new THREE.MeshStandardMaterial({
+
+                color:
+                    0xffffff,
+
+                roughness:
+                    0.9,
+
+                metalness:
+                    0.0
+
+            });
+
+
+        const ground =
+            new THREE.Mesh(
+
+                groundGeometry,
+                groundMaterial
+
+            );
+
+
+        // 水平にする
+        ground.rotation.x =
+            -Math.PI / 2;
+
+
+        // 建物中心の高さ
+        ground.position.y =
+            box.min.y;
+
+
+        // ★ 影を受ける
+        ground.receiveShadow =
+            true;
+
+
+        scene.add(
+
+            ground
+
+        );
+
+
+        // ====================================================
+        // 21. Loading終了
         // ====================================================
 
         document.getElementById(
             'loading'
-        ).style.display = 'none';
+        ).style.display =
+            'none';
 
+
+        console.log(
+            'GLB表示完了'
+        );
 
     },
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // Loading Progress
-    // --------------------------------------------------------
+    // ========================================================
 
     function (xhr) {
 
 
-        if (xhr.total > 0) {
+        if (
+            xhr.total > 0
+        ) {
 
 
             const percent =
                 xhr.loaded /
                 xhr.total *
                 100;
+
+
+            document.getElementById(
+                'loading'
+            ).textContent =
+
+                'GLB Loading... ' +
+                percent.toFixed(1) +
+                '%';
 
 
             console.log(
@@ -648,23 +981,43 @@ loader.load(
     },
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // Error
-    // --------------------------------------------------------
+    // ========================================================
 
     function (error) {
 
 
         console.error(
-            'GLB Loading Error:',
+            '================================'
+        );
+
+
+        console.error(
+            'GLB Loading Error'
+        );
+
+
+        console.error(
             error
+        );
+
+
+        console.error(
+            '================================'
         );
 
 
         document.getElementById(
             'loading'
-        ).textContent =
-            'GLB Loading Error';
+        ).style.display =
+            'none';
+
+
+        document.getElementById(
+            'error'
+        ).style.display =
+            'block';
 
 
     }
@@ -673,7 +1026,125 @@ loader.load(
 
 
 // ============================================================
-// 20. Window Resize
+// 22. Camera Reset
+// ============================================================
+
+document.getElementById(
+    'resetCamera'
+).addEventListener(
+
+    'click',
+
+    function () {
+
+
+        if (
+            !modelCenter ||
+            !modelSize
+        ) {
+
+            return;
+
+        }
+
+
+        const distance =
+            modelSize * 2.0;
+
+
+        camera.position.set(
+
+            modelCenter.x + distance,
+            modelCenter.y + distance * 0.7,
+            modelCenter.z + distance
+
+        );
+
+
+        controls.target.copy(
+
+            modelCenter
+
+        );
+
+
+        controls.update();
+
+
+    }
+
+);
+
+
+// ============================================================
+// 23. Shadow Camera ON / OFF
+// ============================================================
+
+document.getElementById(
+    'shadowButton'
+).addEventListener(
+
+    'click',
+
+    function () {
+
+
+        shadowHelper.visible =
+            !shadowHelper.visible;
+
+
+    }
+
+);
+
+
+// ============================================================
+// 24. Light ON / OFF
+// ============================================================
+
+document.getElementById(
+    'lightButton'
+).addEventListener(
+
+    'click',
+
+    function () {
+
+
+        dirLight.visible =
+            !dirLight.visible;
+
+
+    }
+
+);
+
+
+// ============================================================
+// 25. Model Information
+// ============================================================
+
+let modelCenter =
+    null;
+
+
+let modelSize =
+    null;
+
+
+// ============================================================
+// 26. GLB再読み込み時の情報保存
+// ============================================================
+
+// GLBロード処理とは別に
+// modelCenter / modelSizeを保持するための
+// traverseではなく、ロード後に設定する構造です.
+//
+// 下記の関数を使用します。
+
+
+// ============================================================
+// 27. Resize
 // ============================================================
 
 window.addEventListener(
@@ -706,14 +1177,16 @@ window.addEventListener(
 
 
 // ============================================================
-// 21. Animation Loop
+// 28. Animation Loop
 // ============================================================
 
 function animate() {
 
 
     requestAnimationFrame(
+
         animate
+
     );
 
 
