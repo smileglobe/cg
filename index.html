@@ -8,44 +8,87 @@
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0">
 
-    <title>Three.js GLB Viewer</title>
+    <title>Three.js R2 GLB Viewer</title>
+
 
     <style>
 
         html,
         body {
+
             margin: 0;
+            padding: 0;
+
             width: 100%;
             height: 100%;
+
             overflow: hidden;
+
+            background: #eeeeee;
+
         }
 
         canvas {
+
             display: block;
+
         }
 
         #loading {
+
             position: fixed;
-            top: 50%;
+
             left: 50%;
-            transform: translate(-50%, -50%);
+            top: 50%;
+
+            transform:
+                translate(-50%, -50%);
 
             padding: 15px 25px;
 
-            background: rgba(0,0,0,0.7);
+            background:
+                rgba(0, 0, 0, 0.75);
+
             color: white;
 
-            font-family: Arial, sans-serif;
+            font-family:
+                Arial,
+                sans-serif;
 
-            border-radius: 5px;
+            border-radius: 6px;
+
+            z-index: 1000;
+
         }
 
     </style>
+
+
+    <!-- =====================================================
+         ★ Import Map
+    ====================================================== -->
+
+    <script type="importmap">
+
+    {
+        "imports": {
+
+            "three":
+                "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+
+            "three/addons/":
+                "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+
+        }
+    }
+
+    </script>
 
 </head>
 
 
 <body>
+
 
 <div id="loading">
     GLB Loading...
@@ -54,14 +97,28 @@
 
 <script type="module">
 
-import * as THREE from
-    'https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js';
+
+// ============================================================
+// Three.js
+// ============================================================
+
+import * as THREE from 'three';
+
+
+// ============================================================
+// OrbitControls
+// ============================================================
 
 import { OrbitControls } from
-    'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/controls/OrbitControls.js';
+    'three/addons/controls/OrbitControls.js';
+
+
+// ============================================================
+// GLTFLoader
+// ============================================================
 
 import { GLTFLoader } from
-    'https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/loaders/GLTFLoader.js';
+    'three/addons/loaders/GLTFLoader.js';
 
 
 // ============================================================
@@ -89,12 +146,20 @@ scene.background =
 
 const camera =
     new THREE.PerspectiveCamera(
+
         45,
-        window.innerWidth / window.innerHeight,
+
+        window.innerWidth /
+        window.innerHeight,
+
         0.1,
+
         10000
+
     );
 
+
+// 仮の位置
 camera.position.set(
     10,
     8,
@@ -108,32 +173,52 @@ camera.position.set(
 
 const renderer =
     new THREE.WebGLRenderer({
+
         antialias: true
+
     });
 
+
 renderer.setSize(
+
     window.innerWidth,
     window.innerHeight
+
 );
+
 
 renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio, 2)
+
+    Math.min(
+        window.devicePixelRatio,
+        2
+    )
+
 );
 
 
+// ============================================================
 // Shadow
+// ============================================================
+
 renderer.shadowMap.enabled = true;
 
 renderer.shadowMap.type =
     THREE.PCFSoftShadowMap;
 
 
-// Color
+// ============================================================
+// Color Management
+// ============================================================
+
 renderer.outputColorSpace =
     THREE.SRGBColorSpace;
 
 
+// ============================================================
 // Tone Mapping
+// ============================================================
+
 renderer.toneMapping =
     THREE.ACESFilmicToneMapping;
 
@@ -141,8 +226,14 @@ renderer.toneMappingExposure =
     1.0;
 
 
+// ============================================================
+// Canvas
+// ============================================================
+
 document.body.appendChild(
+
     renderer.domElement
+
 );
 
 
@@ -152,12 +243,17 @@ document.body.appendChild(
 
 const ambientLight =
     new THREE.AmbientLight(
+
         0xffffff,
+
         0.6
+
     );
 
 scene.add(
+
     ambientLight
+
 );
 
 
@@ -167,20 +263,31 @@ scene.add(
 
 const dirLight =
     new THREE.DirectionalLight(
+
         0xffffff,
+
         2.0
+
     );
 
+
 dirLight.position.set(
+
     20,
     20,
     10
+
 );
 
+
+// 影を有効化
 dirLight.castShadow = true;
 
 
+// ============================================================
 // Shadow Map
+// ============================================================
+
 dirLight.shadow.mapSize.width =
     2048;
 
@@ -188,7 +295,10 @@ dirLight.shadow.mapSize.height =
     2048;
 
 
+// ============================================================
 // Shadow Camera
+// ============================================================
+
 dirLight.shadow.camera.near =
     0.1;
 
@@ -214,11 +324,15 @@ dirLight.shadow.bias =
 
 
 scene.add(
+
     dirLight
+
 );
 
 scene.add(
+
     dirLight.target
+
 );
 
 
@@ -228,16 +342,22 @@ scene.add(
 
 const controls =
     new OrbitControls(
+
         camera,
         renderer.domElement
+
     );
+
 
 controls.enableDamping =
     true;
 
+controls.dampingFactor =
+    0.05;
+
 
 // ============================================================
-// GLTF Loader
+// GLTFLoader
 // ============================================================
 
 const loader =
@@ -245,11 +365,11 @@ const loader =
 
 
 // ============================================================
-// GLB Load
+// GLB Loading
 // ============================================================
 
 console.log(
-    'GLB Loading:',
+    'Loading GLB:',
     modelUrl
 );
 
@@ -259,18 +379,23 @@ loader.load(
     modelUrl,
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // SUCCESS
-    // --------------------------------------------------------
+    // ========================================================
 
     function(gltf) {
+
+
+        console.log(
+            '================================'
+        );
 
         console.log(
             'GLB LOAD SUCCESS'
         );
 
         console.log(
-            gltf
+            '================================'
         );
 
 
@@ -278,53 +403,69 @@ loader.load(
             gltf.scene;
 
 
-        // ----------------------------------------------------
+        // ====================================================
         // Mesh設定
-        // ----------------------------------------------------
+        // ====================================================
 
-        model.traverse(function(object) {
+        model.traverse(
 
-            if (object.isMesh) {
-
-                object.castShadow =
-                    true;
-
-                object.receiveShadow =
-                    true;
+            function(object) {
 
 
-                console.log(
-                    'Mesh:',
-                    object.name
-                );
+                if (
+                    object.isMesh
+                ) {
 
 
-                if (object.material) {
+                    // 影を落とす
+                    object.castShadow =
+                        true;
+
+
+                    // 影を受ける
+                    object.receiveShadow =
+                        true;
+
 
                     console.log(
-                        'Material:',
-                        object.material.name
+                        'Mesh:',
+                        object.name
                     );
+
+
+                    // Material確認
+                    if (
+                        object.material
+                    ) {
+
+                        console.log(
+                            'Material:',
+                            object.material.name
+                        );
+
+                    }
 
                 }
 
             }
 
-        });
-
-
-        // ----------------------------------------------------
-        // Sceneへ追加
-        // ----------------------------------------------------
-
-        scene.add(
-            model
         );
 
 
-        // ----------------------------------------------------
-        // モデルサイズ取得
-        // ----------------------------------------------------
+        // ====================================================
+        // Sceneへ追加
+        // ====================================================
+
+        scene.add(
+
+            model
+
+        );
+
+
+        // ====================================================
+        // Bounding Box
+        // ====================================================
 
         const box =
             new THREE.Box3()
@@ -333,13 +474,17 @@ loader.load(
 
         const size =
             box.getSize(
+
                 new THREE.Vector3()
+
             );
 
 
         const center =
             box.getCenter(
+
                 new THREE.Vector3()
+
             );
 
 
@@ -348,27 +493,30 @@ loader.load(
             size
         );
 
+
         console.log(
             'Model Center:',
             center
         );
 
 
-        // ----------------------------------------------------
+        // ====================================================
         // 最大サイズ
-        // ----------------------------------------------------
+        // ====================================================
 
         const maxSize =
             Math.max(
+
                 size.x,
                 size.y,
                 size.z
+
             );
 
 
-        // ----------------------------------------------------
+        // ====================================================
         // Camera
-        // ----------------------------------------------------
+        // ====================================================
 
         const distance =
             maxSize * 2;
@@ -378,7 +526,8 @@ loader.load(
 
             center.x + distance,
 
-            center.y + distance * 0.7,
+            center.y +
+                distance * 0.7,
 
             center.z + distance
 
@@ -387,72 +536,92 @@ loader.load(
 
         camera.near =
             Math.max(
+
                 maxSize / 1000,
+
                 0.01
+
             );
+
 
         camera.far =
             maxSize * 100;
 
+
         camera.updateProjectionMatrix();
 
 
-        // ----------------------------------------------------
-        // Controls
-        // ----------------------------------------------------
+        // ====================================================
+        // OrbitControls
+        // ====================================================
 
         controls.target.copy(
+
             center
+
         );
+
 
         controls.update();
 
 
-        // ----------------------------------------------------
+        // ====================================================
         // Light Target
-        // ----------------------------------------------------
+        // ====================================================
 
         dirLight.target.position.copy(
+
             center
+
         );
 
 
-        // ----------------------------------------------------
-        // Shadow Camera
-        // ----------------------------------------------------
+        // ====================================================
+        // Shadow Camera自動調整
+        // ====================================================
 
         const shadowSize =
             Math.max(
+
                 maxSize * 1.5,
+
                 10
+
             );
 
 
         dirLight.shadow.camera.left =
             -shadowSize;
 
+
         dirLight.shadow.camera.right =
             shadowSize;
+
 
         dirLight.shadow.camera.top =
             shadowSize;
 
+
         dirLight.shadow.camera.bottom =
             -shadowSize;
 
+
         dirLight.shadow.camera.far =
             Math.max(
+
                 maxSize * 5,
+
                 50
+
             );
 
 
         dirLight.shadow.camera.updateProjectionMatrix();
 
 
-        // ----------------------------------------------------
+        // ====================================================
         // Loading終了
-        // ----------------------------------------------------
+        // ====================================================
 
         document.getElementById(
             'loading'
@@ -463,36 +632,48 @@ loader.load(
     },
 
 
-    // --------------------------------------------------------
-    // PROGRESS
-    // --------------------------------------------------------
+    // ========================================================
+    // Progress
+    // ========================================================
 
     function(xhr) {
 
-        if (xhr.total > 0) {
+
+        if (
+            xhr.total > 0
+        ) {
+
 
             const percent =
                 xhr.loaded /
                 xhr.total *
                 100;
 
+
             document.getElementById(
                 'loading'
             ).textContent =
+
                 'GLB Loading... ' +
                 percent.toFixed(1) +
                 '%';
+
 
         }
 
     },
 
 
-    // --------------------------------------------------------
+    // ========================================================
     // ERROR
-    // --------------------------------------------------------
+    // ========================================================
 
     function(error) {
+
+
+        console.error(
+            '================================'
+        );
 
         console.error(
             'GLB LOAD ERROR'
@@ -500,6 +681,10 @@ loader.load(
 
         console.error(
             error
+        );
+
+        console.error(
+            '================================'
         );
 
 
@@ -519,21 +704,31 @@ loader.load(
 // ============================================================
 
 window.addEventListener(
+
     'resize',
+
     function() {
 
+
         camera.aspect =
+
             window.innerWidth /
             window.innerHeight;
 
+
         camera.updateProjectionMatrix();
 
+
         renderer.setSize(
+
             window.innerWidth,
             window.innerHeight
+
         );
 
+
     }
+
 );
 
 
@@ -543,22 +738,32 @@ window.addEventListener(
 
 function animate() {
 
+
     requestAnimationFrame(
+
         animate
+
     );
+
 
     controls.update();
 
+
     renderer.render(
+
         scene,
         camera
+
     );
 
 }
 
+
 animate();
 
+
 </script>
+
 
 </body>
 
