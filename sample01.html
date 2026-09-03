@@ -310,6 +310,13 @@
 
 import * as THREE from 'three';
 
+// 1. テクスチャの読み込み
+const textureLoader = new THREE.TextureLoader();
+const texture = textureLoader.load('path/to/your/image.jpg');
+
+// 2. 貼り方の指定（リピートの設定）
+texture.wrapS = THREE.RepeatWrapping; // 横方向（U軸）の折り返し設定
+texture.wrapT = THREE.RepeatWrapping; // 縦方向（V軸）の折り返し設定
 
 // ============================================================
 // OrbitControls
