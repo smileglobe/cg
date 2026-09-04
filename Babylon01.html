@@ -2,62 +2,85 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Babylon.js GLB Viewer</title>
-    <!-- Babylon.js CDN からライブラリを読み込み -->
-    <script src="//cdn.babylonjs.com/babylon.js"></script>
+    <title>Babylon.js GLB Viewer - Fixed</title>
     
+    <!-- 【重要】公式の最新 CDN URL に変更しました -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #f0f0f0; }
-        canvas { display: block; width: 100vw; height: 100vh; }
+        canvas { display: block; width: 100vw; height: 100vh; outline: none;}
         
         /* UI スタイル */
         #loading {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            font-family: sans-serif; color: #333; pointer-events: none;
+            font-family: sans-serif; color: #333; pointer-events: none; text-align: center;
         }
         .controls-info {
             position: absolute; bottom: 10px; right: 10px;
             background: rgba(255, 255, 255, 0.9); padding: 10px; border-radius: 4px;
-            font-size: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            font-size: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); max-width: 200px;
         }
     </style>
 </head>
 <body>
 
-<div id="loading">Loading Model...</div>
-<!-- ここに Canvas は JS で生成されます -->
+<div id="loading">Loading Model...<br><small>Please ensure CORS is enabled on your Cloudflare domain.</small></div>
+<!-- Canvas は JS で動的に生成されます -->
 
 <script>
 // --- 設定部分 ---
-const MODEL_URL = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb'; // Cloudflare の URL に変更してください
-const TEXTURE_DIR = ''; // テクスチャがある場合のディレクトリパス (空の場合は不要)
+const MODEL_URL = 'https://your-cloudflare-domain.com/path/to/model.glb'; // ここをあなたの URL に書き換えてください
+const TEXTURE_DIR = ''; 
 
 async function createScene() {
-    const engine = new BABYLON.Engine(document.body, true, { preserveDrawingBuffer: false, stencil: false });
-    const canvas = document.querySelector('canvas');
+    // 1. Engine の作成 (WebGL 2 を指定)
+    const engine = new BABYLON.Engine(document.body, true, { 
+        preserveDrawingBuffer: false, 
+        stencil: false,
+        preferWebgl2: true // WebGL 2 を優先的に使用するように指示
+    });
 
-    // シーン作成
+    if (!engine) {
+        document.getElementById('loading').innerHTML += "<br><strong>Error:</strong> Your browser does not support WebGL.";
+        return;
+    }
+
+    // 2. Canvas の取得とサイズ調整（初期化直後でも有効にするため）
+    let canvas = document.querySelector('canvas');
+    
+    window.addEventListener("resize", () => {
+        if(canvas && scene) {
+            engine.resize();
+        }
+    }, false);
+
+    // 3. シーンの作成
     const scene = new BABYLON.Scene(engine);
-    scene.clearColor = new BABYLON.Color4(0.9, 0.9, 0.9, 1); // 背景色（グリッドが見えるように白）
+    scene.clearColor = new BABYLON.Color4(0.9, 0.9, 0.9, 1);
 
-    // ライティング設定
-    scene.environmentTextureLoader.loadEnvironmentTexture("env", "https://raw.githubusercontent.com/BabylonJS/WebSamples/master/BasicLightingAndShadows/assets/environment.jpg");
+    // 環境マップの読み込み（光の反射計算用。失敗しても動作はするが質感が変わる可能性があります）
+    try {
+        await scene.environmentTextureLoader.loadEnvironmentTexture("env", "https://raw.githubusercontent.com/BabylonJS/WebSamples/master/BasicLightingAndShadows/assets/environment.jpg");
+    } catch(e) { console.warn("Environment texture failed to load."); }
+
+    // ライティング
     const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
     light.intensity = 0.7;
 
-    // グRID プラン（床）を追加してスケール感を把握しやすくする
+    // グRID プラン（床）
     const gridHelper = new BABYLON.GridHelper(scene, 10, "#cccccc", "#ffffff");
-    
+
     // カメラ設置
     const camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2.5, 6, new BABYLON.Vector3(0, 0, 0), scene);
     camera.attachControl(canvas, true);
     camera.wheelPrecision = 50;
 
-    // GLB ローダーの設定
+    // 4. GLB/GLTF ローダーの設定
     const glbLoader = new BABYLON.GLBLoader();
-    
+
     try {
         // モデルを読み込む
+        // Note: Babylon v7 では ImportMeshAsync が推奨されることがありますが、GLB は直接 Load で扱えます。
         await glbLoader.load(MODEL_URL, null, scene);
         
         // 読み込み完了時の処理
@@ -69,10 +92,6 @@ async function createScene() {
                 // ここでモデルのアニメーションや更新ロジックを書く
             }
         });
-
-        window.addEventListener("resize", () => {
-            engine.resize();
-        }, false);
 
     } catch (error) {
         console.error("GLB Loading Error:", error);
