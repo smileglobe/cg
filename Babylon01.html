@@ -5,7 +5,15 @@
     <title>Babylon.js GLB Viewer</title>
     <style>
         body { margin: 0; overflow: hidden; }
-        #info { position: absolute; top: 10px; left: 10px; z-index: 999; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; }
+        #info { 
+            position: absolute; 
+            top: 10px; 
+            left: 10px; 
+            z-index: 999; 
+            background: rgba(255,255,255,0.8); 
+            padding: 10px; 
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -15,7 +23,13 @@
     <script src="https://cdn.babylonjs.com/babylon.js"></script>
     <script src="https://cdn.babylonjs.com/loaders/babylon.loaders.min.js"></script>
 
+    <!-- Canvas 要素を作成 -->
+    <canvas id="renderCanvas" width="window.innerWidth" height="window.innerHeight"></canvas>
+
     <script>
+        // Canvas の参照を取得
+        const canvas = document.getElementById("renderCanvas");
+
         // 1. シーンとエンジンを作成
         const engine = new BABYLON.Engine(canvas, true);
 
@@ -36,8 +50,8 @@
             return scene;
         };
 
-        // 2. Cloudflare 上の GLB ファイルの URL を設定
-        const glbUrl = "https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb";
+        // 2. Cloudflare 上の GLB ファイルの URL を設定（ここを変更）
+        const glbUrl = "https://your-cloudflare-url.com/path/to/model.glb";
 
         // 3. GLB ファイルを読み込む
         BABYLON.SceneLoader.ImportMeshAsync("", "", glbUrl, createScene())
@@ -62,6 +76,14 @@
                 engine.resize();
             });
         });
+
+        // 5. シーンを作成（エラーハンドリング）
+        let scene;
+        try {
+            scene = createScene();
+        } catch (error) {
+            console.error("シーンの作成に失敗:", error);
+        }
     </script>
 </body>
 </html>
