@@ -19,22 +19,19 @@
             touch-action: none;
         }
     </style>
-    <!-- Babylon.js Core と Loader の読み込み -->
-    <script src="https://babylonjs.com"></script>
-    <script src="https://babylonjs.com"></script>
+    <!-- 【修正】信頼性の高い cdnjs から読み込むように変更しました -->
+    <script src="https://cloudflare.com"></script>
+    <script src="https://cloudflare.com"></script>
 </head>
 <body>
 
     <canvas id="renderCanvas"></canvas>
 
     <script>
-        // ─── 修正ポイント ───
-        // 画面の読み込み（ライブラリのロード）が完全に終わってから実行する
         window.addEventListener('DOMContentLoaded', function () {
             
-            // ここでBABYLONが定義されているか安全確認
             if (typeof BABYLON === 'undefined') {
-                console.error("Babylon.js が正常に読み込めませんでした。ネット接続やURLを確認してください。");
+                console.error("cdnjs からの読み込みもブロックされました。修正方法2を試してください。");
                 return;
             }
 
@@ -45,20 +42,20 @@
                 const scene = new BABYLON.Scene(engine);
                 scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.2, 1);
 
-                const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
+                // カメラの初期位置を調整（少し引いた位置に設定）
+                const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, BABYLON.Vector3.Zero(), scene);
                 camera.attachControl(canvas, true);
 
                 const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
                 light.intensity = 0.7;
 
-                // Cloudflare上の3Dモデル設定（ご自身の環境に合わせて変更してください）
+                // Cloudflare上の3Dモデル設定
                 const fileUrl = "https://your-cloudflare-r2-or-pages-url.com"; 
                 const fileName = "your-model.glb"; 
 
                 BABYLON.SceneLoader.ImportMesh("", fileUrl, fileName, scene, function (meshes) {
-                    if (meshes.length > 0) {
-                        // 読み込み成功時の処理
-                    }
+                    // モデルが小さすぎたり大きすぎたりした時のために、自動でカメラ位置を合わせる
+                    scene.createDefaultCameraOrLight(true, true, true);
                 }, null, function (scene, message, exception) {
                     console.error("モデルの読み込みに失敗しました:", message, exception);
                 });
