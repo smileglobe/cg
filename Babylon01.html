@@ -30,6 +30,13 @@
         // Canvas の参照を取得
         const canvas = document.getElementById("renderCanvas");
 
+        // Babylon.js が正しく読み込まれているか確認
+        if (typeof BABYLON === 'undefined') {
+            console.error('BABYLON is not defined! Please check the CDN script loading.');
+        } else {
+            console.log('BABYLON loaded successfully');
+        }
+
         // 1. シーンとエンジンを作成
         const engine = new BABYLON.Engine(canvas, true);
 
@@ -50,10 +57,10 @@
             return scene;
         };
 
-        // 2. Cloudflare 上の GLB ファイルの URL を設定（ここを変更）
+        // 2. R2 の GLB ファイルの URL を設定
         const glbUrl = "https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb";
 
-        // 3. GLB ファイルを読み込む
+        // 3. GLB ファイルを読み込む（SceneLoader を使用）
         BABYLON.SceneLoader.ImportMeshAsync("", "", glbUrl, createScene())
             .then(function (result) {
                 console.log("モデルが正常に読み込まれました");
