@@ -1,74 +1,63 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Babylon.js 3D Model Viewer</title>
+    <meta charset="utf-8">
+    <title>Babylon.js GLB Viewer</title>
     <style>
-        html, body {
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            background-color: #333333;
-        }
-        #renderCanvas {
-            width: 100%;
-            height: 100%;
-            touch-action: none;
-        }
+        body { margin: 0; overflow: hidden; }
+        #info { position: absolute; top: 10px; left: 10px; z-index: 999; background: rgba(255,255,255,0.8); padding: 10px; border-radius: 5px; }
     </style>
-    <!-- 【修正】信頼性の高い cdnjs から読み込むように変更しました -->
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
 </head>
 <body>
+    <div id="info">Cloudflare GLB ファイルを表示中</div>
 
-    <canvas id="renderCanvas"></canvas>
+    <!-- Babylon.js と Loaders を CDN から読み込む -->
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylon.loaders.min.js"></script>
 
     <script>
-        window.addEventListener('DOMContentLoaded', function () {
+        // 1. シーンとエンジンを作成
+        const engine = new BABYLON.Engine(canvas, true);
+
+        const createScene = function () {
+            const scene = new BABYLON.Scene(engine);
             
-            if (typeof BABYLON === 'undefined') {
-                console.error("cdnjs からの読み込みもブロックされました。修正方法2を試してください。");
-                return;
-            }
+            // 背景色を設定
+            scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.3, 1);
+            
+            // カメラを作成
+            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
+            camera.attachControl(canvas, true);
 
-            const canvas = document.getElementById("renderCanvas");
-            const engine = new BABYLON.Engine(canvas, true);
+            // ライトを設定
+            const directionalLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1, -2, -1), scene);
+            directionalLight.intensity = 0.5;
 
-            const createScene = function () {
-                const scene = new BABYLON.Scene(engine);
-                scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.2, 1);
+            return scene;
+        };
 
-                // カメラの初期位置を調整（少し引いた位置に設定）
-                const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 10, BABYLON.Vector3.Zero(), scene);
-                camera.attachControl(canvas, true);
+        // 2. Cloudflare 上の GLB ファイルの URL を設定
+        const glbUrl = "https://your-cloudflare-url.com/path/to/model.glb";
 
-                const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-                light.intensity = 0.7;
-
-                // Cloudflare上の3Dモデル設定
-                const fileUrl = "https://your-cloudflare-r2-or-pages-url.com"; 
-                const fileName = "your-model.glb"; 
-
-                BABYLON.SceneLoader.ImportMesh("", fileUrl, fileName, scene, function (meshes) {
-                    // モデルが小さすぎたり大きすぎたりした時のために、自動でカメラ位置を合わせる
-                    scene.createDefaultCameraOrLight(true, true, true);
-                }, null, function (scene, message, exception) {
-                    console.error("モデルの読み込みに失敗しました:", message, exception);
+        // 3. GLB ファイルを読み込む
+        BABYLON.SceneLoader.ImportMeshAsync("", "", glbUrl, createScene())
+            .then(function (result) {
+                console.log("モデルが正常に読み込まれました");
+                result.meshes.forEach((mesh, index) => {
+                    mesh.name = "Model_" + index;
                 });
+            })
+            .catch(function (error) {
+                console.error("読み込みエラー:", error);
+            });
 
-                return scene;
-            };
-
-            const scene = createScene();
-
+        // 4. エンジンを実行
+        window.addEventListener("load", function () {
             engine.runRenderLoop(function () {
                 scene.render();
             });
-
+            
+            // ウィンドウリサイズ対応
             window.addEventListener("resize", function () {
                 engine.resize();
             });
