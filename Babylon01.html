@@ -34,7 +34,14 @@
         if (typeof BABYLON === 'undefined') {
             console.error('BABYLON is not defined! Please check the CDN script loading.');
         } else {
-            console.log('BABYLON loaded successfully');
+            console.log('✓ BABYLON loaded successfully');
+        }
+
+        // Loaders が正しく登録されているか確認
+        if (typeof BABYLON.Tools === 'undefined' || typeof BABYLON.Tools.LoadFile === 'undefined') {
+            console.error('Loaders are not registered! Check babylon.loaders.min.js loading.');
+        } else {
+            console.log('✓ Loaders registered successfully');
         }
 
         // 1. シーンとエンジンを作成
@@ -61,15 +68,24 @@
         const glbUrl = "https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb";
 
         // 3. GLB ファイルを読み込む（SceneLoader を使用）
+        console.log("Attempting to load GLB from:", glbUrl);
+        
         BABYLON.SceneLoader.ImportMeshAsync("", "", glbUrl, createScene())
             .then(function (result) {
-                console.log("モデルが正常に読み込まれました");
+                console.log("✓ モデルが正常に読み込まれました");
                 result.meshes.forEach((mesh, index) => {
                     mesh.name = "Model_" + index;
                 });
+                
+                // Inspector を開く（デバッグ用）
+                const inspector = BABYLON.GetDefaultInspector();
+                if (inspector) {
+                    console.log("Inspector opened");
+                }
             })
             .catch(function (error) {
-                console.error("読み込みエラー:", error);
+                console.error("✗ 読み込みエラー:", error);
+                console.error("Error details:", JSON.stringify(error, null, 2));
             });
 
         // 4. エンジンを実行
@@ -87,10 +103,18 @@
         // 5. シーンを作成（エラーハンドリング）
         let scene;
         try {
+            console.log("Creating scene...");
             scene = createScene();
+            console.log("✓ Scene created successfully");
         } catch (error) {
-            console.error("シーンの作成に失敗:", error);
+            console.error("✗ シーンの作成に失敗:", error);
         }
+
+        // 6. 追加のデバッグ情報
+        console.log("=== Debug Info ===");
+        console.log("Engine:", engine);
+        console.log("Scene:", scene);
+        console.log("Canvas:", canvas);
     </script>
 </body>
 </html>
