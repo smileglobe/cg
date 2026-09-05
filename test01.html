@@ -3,1274 +3,232 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>GLB Architectural Viewer</title>
-
+<title>GLB Viewer — Babylon.js</title>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs@8.20.0/babylon.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs-loaders@8.20.0/babylonjs.loaders.min.js"></script>
 <style>
-    * {
-        box-sizing: border-box;
-    }
+  :root{
+    --bg: #15171c;
+    --panel: #1d2027;
+    --border: #2b2f38;
+    --text: #e7e9ee;
+    --text-dim: #8b93a1;
+    --accent: #5b8def;
+    --danger: #e2685a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    overflow: hidden;
+  }
+  #renderCanvas {
+    width: 100%; height: 100%; display: block; touch-action: none; outline: none;
+  }
 
-    html,
-    body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        font-family: Arial, sans-serif;
-        background: #eeeeee;
-    }
+  .toolbar {
+    position: fixed; top: 16px; left: 16px; right: 16px;
+    display: flex; gap: 8px; align-items: center;
+    z-index: 10;
+  }
 
-    #viewer {
-        width: 100%;
-        height: 100%;
-    }
+  .toggle {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .toggle input { accent-color: var(--accent); }
 
-    /* -----------------------------
-       UI
-    ----------------------------- */
+  .hint {
+    position: fixed; bottom: 16px; left: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    z-index: 10;
+  }
 
-    #ui {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 100;
-
-        padding: 16px;
-
-        background: rgba(255,255,255,0.95);
-        border-radius: 10px;
-
-        box-shadow:
-            0 4px 20px rgba(0,0,0,0.15);
-
-        min-width: 220px;
-    }
-
-    #ui h2 {
-        margin: 0 0 12px 0;
-        font-size: 18px;
-    }
-
-    #ui label {
-        display: block;
-        margin-bottom: 6px;
-        font-size: 13px;
-        color: #444;
-    }
-
-    #wallPattern {
-        width: 100%;
-        padding: 9px;
-
-        border: 1px solid #cccccc;
-        border-radius: 6px;
-
-        background: white;
-        font-size: 14px;
-
-        cursor: pointer;
-    }
-
-    #resetCamera {
-        width: 100%;
-        margin-top: 12px;
-
-        padding: 9px;
-
-        border: none;
-        border-radius: 6px;
-
-        background: #333;
-        color: white;
-
-        cursor: pointer;
-    }
-
-    #resetCamera:hover {
-        background: #555;
-    }
-
-    #status {
-        margin-top: 10px;
-        font-size: 12px;
-        color: #666;
-        line-height: 1.5;
-    }
-
-    #loading {
-        position: fixed;
-        inset: 0;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        background: #eeeeee;
-
-        z-index: 200;
-
-        font-size: 16px;
-        color: #444;
-    }
-
-    #error {
-        position: fixed;
-
-        top: 20px;
-        right: 20px;
-
-        max-width: 400px;
-
-        padding: 15px;
-
-        background: #ffdddd;
-        color: #990000;
-
-        border: 1px solid #dd9999;
-        border-radius: 8px;
-
-        z-index: 300;
-
-        display: none;
-
-        white-space: pre-wrap;
-    }
+  .status {
+    position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-dim);
+    z-index: 10;
+    display: none;
+  }
+  .status.error { border-color: var(--danger); color: var(--danger); }
+  .status.visible { display: block; }
 </style>
-
-<!-- ==========================================
-     Import Map
-========================================== -->
-
-<script type="importmap">
-{
-    "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
-    }
-}
-</script>
-
 </head>
-
 <body>
 
-<div id="viewer"></div>
+<canvas id="renderCanvas"></canvas>
 
-<!-- UI -->
-
-<div id="ui">
-
-    <h2>壁材変更</h2>
-
-    <label for="wallPattern">
-        テクスチャーパターン
-    </label>
-
-    <select id="wallPattern">
-
-        <option value="A">
-            パターンA
-        </option>
-
-        <option value="B">
-            パターンB
-        </option>
-
-    </select>
-
-    <button id="resetCamera">
-        カメラリセット
-    </button>
-
-    <div id="status">
-        GLB読み込み中...
-    </div>
-
+<div class="toolbar">
+  <label class="toggle">
+    <input type="checkbox" id="autoRotate">
+    自動回転
+  </label>
 </div>
 
-<div id="loading">
-    3Dモデル読み込み中...
+<div class="status" id="status"></div>
+
+<div class="hint">
+  左ドラッグ：回転　　右ドラッグ／2本指：移動　　スクロール：ズーム
 </div>
 
-<div id="error"></div>
+<script>
+  const canvas = document.getElementById('renderCanvas');
+  const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
 
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.082, 0.09, 0.11, 1);
 
-<script type="module">
+  const camera = new BABYLON.ArcRotateCamera(
+    "camera", -Math.PI / 2.5, Math.PI / 2.5, 10, BABYLON.Vector3.Zero(), scene
+  );
+  camera.attachControl(canvas, true);
+  camera.wheelPrecision = 30;
+  camera.lowerRadiusLimit = 0.01;
+  camera.minZ = 0.01;
 
-/* =====================================================
-   Three.js
-===================================================== */
+  const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
+  hemiLight.intensity = 0.35;
+  const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1, -2, -1), scene);
+  dirLight.intensity = 1.0;
+  dirLight.position = new BABYLON.Vector3(20, 40, 20);
 
-import * as THREE from 'three';
+  // 影を落とす地面
+  const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 50, height: 50 }, scene);
+  const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+  groundMat.diffuseColor = new BABYLON.Color3(0.16, 0.17, 0.19);
+  groundMat.specularColor = new BABYLON.Color3(0, 0, 0);
+  ground.material = groundMat;
+  ground.receiveShadows = true;
 
-import { OrbitControls }
-    from 'three/addons/controls/OrbitControls.js';
+  // 影の生成
+  const shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight);
+  shadowGenerator.useBlurExponentialShadowMap = true;
+  shadowGenerator.blurKernel = 32;
+  shadowGenerator.darkness = 0.85;
+  shadowGenerator.bias = 0.001;
+  shadowGenerator.normalBias = 0.02;
 
-import { GLTFLoader }
-    from 'three/addons/loaders/GLTFLoader.js';
+  const GLB_URL = "https://pub-281458c844204a28b7739a26e30e848b.r2.dev/car.glb";
 
+  let currentRoot = null;
 
-/* =====================================================
-   R2 URL設定
-===================================================== */
+  function showStatus(message, isError) {
+    const el = document.getElementById('status');
+    el.textContent = message;
+    el.className = 'status visible' + (isError ? ' error' : '');
+  }
+  function hideStatus() {
+    document.getElementById('status').className = 'status';
+  }
 
-/*
-    GLB
-*/
-
-const modelUrl =
-    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/car.glb';
-
-
-/*
-    テクスチャーのフォルダ
-
-    R2が
-
-    textures/
-        wall_A_01.jpg
-        wall_A_02.jpg
-        wall_B_01.jpg
-        wall_B_02.jpg
-
-    の構成になっている場合
-*/
-
-const textureBaseUrl =
-    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample01Texture/';
-
-
-/* =====================================================
-   テクスチャーURL
-===================================================== */
-
-const textureUrls = {
-
-    // パターンA
-    A1: textureBaseUrl + 'wall_A_01.jpg',
-    A2: textureBaseUrl + 'wall_A_02.jpg',
-
-    // パターンB
-    B1: textureBaseUrl + 'wall_B_01.jpg',
-    B2: textureBaseUrl + 'wall_B_02.jpg'
-
-};
-
-
-/* =====================================================
-   Scene
-===================================================== */
-
-const scene = new THREE.Scene();
-
-
-scene.background =
-    new THREE.Color(0xf2f2f2);
-
-
-/* =====================================================
-   Camera
-===================================================== */
-
-const camera =
-    new THREE.PerspectiveCamera(
-        45,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-    );
-
-
-camera.position.set(
-    7,
-    8,
-    7
-);
-
-
-/* =====================================================
-   Renderer
-===================================================== */
-
-const renderer =
-    new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: false
+  function frameCamera(meshes) {
+    let min = null, max = null;
+    meshes.forEach(m => {
+      if (!m.getBoundingInfo) return;
+      const bb = m.getBoundingInfo().boundingBox;
+      const bMin = bb.minimumWorld, bMax = bb.maximumWorld;
+      min = min ? BABYLON.Vector3.Minimize(min, bMin) : bMin.clone();
+      max = max ? BABYLON.Vector3.Maximize(max, bMax) : bMax.clone();
     });
-
-
-renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio, 2)
-);
-
-renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-);
-
-
-/*
-    影を有効化
-*/
-
-renderer.shadowMap.enabled = true;
-
-renderer.shadowMap.type =
-    THREE.PCFSoftShadowMap;
-
-
-/*
-    色空間
-*/
-
-renderer.outputColorSpace =
-    THREE.SRGBColorSpace;
-
-
-/*
-    Tone Mapping
-*/
-
-renderer.toneMapping =
-    THREE.ACESFilmicToneMapping;
-
-renderer.toneMappingExposure = 1.0;
-
-
-document
-    .getElementById('viewer')
-    .appendChild(renderer.domElement);
-
-
-/* =====================================================
-   Controls
-===================================================== */
-
-const controls =
-    new OrbitControls(
-        camera,
-        renderer.domElement
-    );
-
-
-controls.enableDamping = true;
-
-controls.dampingFactor = 0.05;
-
-controls.minDistance = 1;
-
-controls.maxDistance = 200;
-
-
-/* =====================================================
-   Lights
-===================================================== */
-
-
-/*
-    Ambient Light
-
-    数値を下げると影が濃くなる
-*/
-
-const ambientLight =
-    new THREE.AmbientLight(
-        0xffffff,
-        0.5
-    );
-
-scene.add(ambientLight);
-
-
-/*
-    Directional Light
-*/
-
-const dirLight =
-    new THREE.DirectionalLight(
-        0xffffff,
-        1.0
-    );
-
-
-dirLight.position.set(
-    20,
-    30,
-    20
-);
-
-
-dirLight.castShadow = true;
-
-
-/*
-    Shadow Map
-*/
-
-dirLight.shadow.mapSize.width =
-    2048;
-
-dirLight.shadow.mapSize.height =
-    2048;
-
-
-/*
-    Shadow Camera
-*/
-
-dirLight.shadow.camera.near =
-    0.5;
-
-dirLight.shadow.camera.far =
-    100;
-
-dirLight.shadow.camera.left =
-    -30;
-
-dirLight.shadow.camera.right =
-    30;
-
-dirLight.shadow.camera.top =
-    30;
-
-dirLight.shadow.camera.bottom =
-    -30;
-
-
-/*
-    Shadow Bias
-*/
-
-dirLight.shadow.bias =
-    -0.0001;
-
-
-scene.add(dirLight);
-
-
-/* =====================================================
-   Variables
-===================================================== */
-
-let wallMesh1 = null;
-let wallMesh2 = null;
-
-let textures = {};
-
-let originalCameraPosition =
-    new THREE.Vector3();
-
-let originalTarget =
-    new THREE.Vector3();
-
-
-/* =====================================================
-   UI
-===================================================== */
-
-const statusElement =
-    document.getElementById('status');
-
-const loadingElement =
-    document.getElementById('loading');
-
-const errorElement =
-    document.getElementById('error');
-
-
-/* =====================================================
-   Error
-===================================================== */
-
-function showError(message) {
-
-    console.error(message);
-
-    errorElement.textContent =
-        message;
-
-    errorElement.style.display =
-        'block';
-
-}
-
-
-/* =====================================================
-   Texture Loader
-===================================================== */
-
-const textureLoader =
-    new THREE.TextureLoader();
-
-
-function loadTexture(url) {
-
-    return new Promise(
-        (resolve, reject) => {
-
-            textureLoader.load(
-
-                url,
-
-                (texture) => {
-
-                    /*
-                        JPGなどのカラー画像
-                    */
-
-                    texture.colorSpace =
-                        THREE.SRGBColorSpace;
-
-
-                    /*
-                        GLTFのUV座標に合わせる
-
-                        Three.jsのTextureLoaderでは
-                        GLTFのテクスチャーを差し替える
-                        場合 flipY=false が重要
-                    */
-
-                    texture.flipY = false;
-
-
-                    /*
-                        繰り返し
-                    */
-
-                    texture.wrapS =
-                        THREE.RepeatWrapping;
-
-                    texture.wrapT =
-                        THREE.RepeatWrapping;
-
-
-                    texture.needsUpdate =
-                        true;
-
-
-                    resolve(texture);
-
-                },
-
-                undefined,
-
-                (error) => {
-
-                    reject(
-                        new Error(
-                            'テクスチャー読み込み失敗:\n' +
-                            url
-                        )
-                    );
-
-                }
-
-            );
-
-        }
-    );
-
-}
-
-
-/* =====================================================
-   Load All Textures
-===================================================== */
-
-async function loadTextures() {
-
-    statusElement.textContent =
-        'テクスチャー読み込み中...';
-
+    if (!min || !max) return;
+    const center = min.add(max).scale(0.5);
+    const size = max.subtract(min).length();
+
+    camera.target = center;
+    camera.radius = size * 1.4 || 10;
+    camera.lowerRadiusLimit = size * 0.02;
+    camera.upperRadiusLimit = size * 6;
+
+    // 地面をモデルの底面に合わせて配置
+    const groundSize = Math.max(size * 4, 1);
+    ground.scaling.set(groundSize / 50, 1, groundSize / 50);
+    ground.position.x = center.x;
+    ground.position.z = center.z;
+    ground.position.y = min.y - size * 0.002;
+
+    // モデルのサイズに合わせて影の投影範囲を自動調整
+    dirLight.autoCalcShadowZBounds = true;
+  }
+
+  async function loadModel(url) {
+    if (!url) {
+      showStatus('URLを入力してください', true);
+      return;
+    }
+    showStatus('読み込み中… 0%', false);
+
+    if (currentRoot) {
+      currentRoot.getChildMeshes().forEach(m => shadowGenerator.removeShadowCaster(m));
+      currentRoot.dispose();
+      currentRoot = null;
+    }
+
+    const lastSlash = url.lastIndexOf('/');
+    const rootUrl = lastSlash >= 0 ? url.substring(0, lastSlash + 1) : '';
+    const fileName = lastSlash >= 0 ? url.substring(lastSlash + 1) : url;
 
     try {
-
-        textures.A1 =
-            await loadTexture(
-                textureUrls.A1
-            );
-
-        textures.A2 =
-            await loadTexture(
-                textureUrls.A2
-            );
-
-        textures.B1 =
-            await loadTexture(
-                textureUrls.B1
-            );
-
-        textures.B2 =
-            await loadTexture(
-                textureUrls.B2
-            );
-
-
-        console.log(
-            'All textures loaded',
-            textures
-        );
-
-    }
-    catch (error) {
-
-        showError(
-            error.message
-        );
-
-        throw error;
-
-    }
-
-}
-
-
-/* =====================================================
-   Change Texture
-===================================================== */
-
-function changeWallTexture(
-    mesh,
-    texture
-) {
-
-    if (!mesh) {
-
-        console.warn(
-            'Wall mesh not found'
-        );
-
-        return;
-
-    }
-
-
-    if (!mesh.material) {
-
-        console.warn(
-            'Material not found:',
-            mesh.name
-        );
-
-        return;
-
-    }
-
-
-    /*
-        MeshStandardMaterialなど
-    */
-
-    if (
-        mesh.material.isMeshStandardMaterial ||
-        mesh.material.isMeshPhysicalMaterial ||
-        mesh.material.isMeshPhongMaterial ||
-        mesh.material.isMeshLambertMaterial
-    ) {
-
-        /*
-            UVを維持したまま
-            mapだけ変更
-        */
-
-        texture.flipY = false;
-
-        texture.colorSpace =
-            THREE.SRGBColorSpace;
-
-
-        mesh.material.map =
-            texture;
-
-
-        mesh.material.needsUpdate =
-            true;
-
-
-        console.log(
-            'Texture changed:',
-            mesh.name,
-            mesh.material.name
-        );
-
-    }
-
-}
-
-
-/* =====================================================
-   Change Wall Pattern
-===================================================== */
-
-function setWallPattern(pattern) {
-
-    console.log(
-        'Change pattern:',
-        pattern
-    );
-
-
-    if (!wallMesh1 || !wallMesh2) {
-
-        console.warn(
-            'Wall mesh is not ready'
-        );
-
-        return;
-
-    }
-
-
-    /*
-        =========================
-        Pattern A
-        =========================
-
-        Wall_01
-        ↓
-        wall_A_01.jpg
-
-        Wall_02
-        ↓
-        wall_A_02.jpg
-    */
-
-    if (pattern === 'A') {
-
-        changeWallTexture(
-            wallMesh1,
-            textures.A1
-        );
-
-        changeWallTexture(
-            wallMesh2,
-            textures.A2
-        );
-
-    }
-
-
-    /*
-        =========================
-        Pattern B
-        =========================
-
-        Wall_01
-        ↓
-        wall_B_01.jpg
-
-        Wall_02
-        ↓
-        wall_B_02.jpg
-    */
-
-    if (pattern === 'B') {
-
-        changeWallTexture(
-            wallMesh1,
-            textures.B1
-        );
-
-        changeWallTexture(
-            wallMesh2,
-            textures.B2
-        );
-
-    }
-
-
-    statusElement.textContent =
-        '現在のパターン：' +
-        pattern;
-
-}
-
-
-/* =====================================================
-   GLB Loader
-===================================================== */
-
-const gltfLoader =
-    new GLTFLoader();
-
-
-async function loadModel() {
-
-    statusElement.textContent =
-        '3Dモデル読み込み中...';
-
-
-    return new Promise(
-        (resolve, reject) => {
-
-            gltfLoader.load(
-
-                modelUrl,
-
-                (gltf) => {
-
-                    const model =
-                        gltf.scene;
-
-
-                    console.log(
-                        'GLB loaded'
-                    );
-
-
-                    /*
-                        =================================
-                        Mesh確認
-                        =================================
-                    */
-
-                    model.traverse(
-                        (object) => {
-
-                            if (!object.isMesh) {
-                                return;
-                            }
-
-
-                            /*
-                                影
-                            */
-
-                            object.castShadow =
-                                true;
-
-                            object.receiveShadow =
-                                true;
-
-
-                            /*
-                                Mesh / Materialを
-                                Consoleに表示
-                            */
-
-                            console.log(
-                                'MESH:',
-                                object.name,
-                                'MATERIAL:',
-                                object.material?.name,
-                                'UV:',
-                                !!object.geometry
-                                    .attributes
-                                    .uv
-                            );
-
-
-                            /*
-                                =============================
-                                Wall_01
-                                =============================
-                            */
-
-                            if (
-                                object.name ===
-                                'Wall_01'
-                            ) {
-
-                                wallMesh1 =
-                                    object;
-
-                                console.log(
-                                    'Wall_01 FOUND',
-                                    object
-                                );
-
-                            }
-
-
-                            /*
-                                =============================
-                                Wall_02
-                                =============================
-                            */
-
-                            if (
-                                object.name ===
-                                'Wall_02'
-                            ) {
-
-                                wallMesh2 =
-                                    object;
-
-                                console.log(
-                                    'Wall_02 FOUND',
-                                    object
-                                );
-
-                            }
-
-                        }
-                    );
-
-
-                    /*
-                        モデルをSceneへ
-                    */
-
-                    scene.add(model);
-
-
-                    /*
-                        Wall確認
-                    */
-
-                    console.log(
-                        'wallMesh1:',
-                        wallMesh1
-                    );
-
-                    console.log(
-                        'wallMesh2:',
-                        wallMesh2
-                    );
-
-
-                    /*
-                        カメラ自動調整
-                    */
-
-                    fitCameraToObject(
-                        model
-                    );
-
-
-                    /*
-                        初期カメラ保存
-                    */
-
-                    originalCameraPosition.copy(
-                        camera.position
-                    );
-
-                    originalTarget.copy(
-                        controls.target
-                    );
-
-
-                    resolve(
-                        model
-                    );
-
-                },
-
-                (progress) => {
-
-                    if (
-                        progress.total > 0
-                    ) {
-
-                        const percent =
-                            (
-                                progress.loaded /
-                                progress.total
-                            ) * 100;
-
-
-                        statusElement.textContent =
-                            'GLB読み込み中... ' +
-                            percent.toFixed(0) +
-                            '%';
-
-                    }
-
-                },
-
-                (error) => {
-
-                    reject(
-                        new Error(
-                            'GLB読み込み失敗:\n' +
-                            modelUrl
-                        )
-                    );
-
-                }
-
-            );
-
+      const result = await BABYLON.SceneLoader.ImportMeshAsync(
+        '', rootUrl, fileName, scene,
+        (evt) => {
+          if (evt.lengthComputable) {
+            const pct = Math.round((evt.loaded / evt.total) * 100);
+            showStatus(`読み込み中… ${pct}%`, false);
+          }
         }
-    );
+      );
 
-}
-
-
-/* =====================================================
-   Camera Fit
-===================================================== */
-
-function fitCameraToObject(
-    object
-) {
-
-    const box =
-        new THREE.Box3()
-            .setFromObject(object);
-
-
-    const size =
-        box.getSize(
-            new THREE.Vector3()
-        );
-
-
-    const center =
-        box.getCenter(
-            new THREE.Vector3()
-        );
-
-
-    const maxSize =
-        Math.max(
-            size.x,
-            size.y,
-            size.z
-        );
-
-
-    const fitHeightDistance =
-        maxSize /
-        (
-            2 *
-            Math.tan(
-                THREE.MathUtils.degToRad(
-                    camera.fov * 0.5
-                )
-            )
-        );
-
-
-    const fitWidthDistance =
-        fitHeightDistance /
-        camera.aspect;
-
-
-    const distance =
-        1.2 *
-        Math.max(
-            fitHeightDistance,
-            fitWidthDistance
-        );
-
-
-    /*
-        カメラ位置
-    */
-
-    camera.position.set(
-        center.x + distance,
-        center.y + distance * 0.6,
-        center.z + distance
-    );
-
-
-    /*
-        注視点
-    */
-
-    controls.target.copy(
-        center
-    );
-
-
-    camera.near =
-        Math.max(
-            0.01,
-            distance / 100
-        );
-
-
-    camera.far =
-        distance * 100;
-
-
-    camera.updateProjectionMatrix();
-
-    controls.update();
-
-}
-
-
-/* =====================================================
-   Camera Reset
-===================================================== */
-
-document
-    .getElementById('resetCamera')
-    .addEventListener(
-        'click',
-        () => {
-
-            camera.position.copy(
-                originalCameraPosition
-            );
-
-            controls.target.copy(
-                originalTarget
-            );
-
-            controls.update();
-
+      currentRoot = new BABYLON.TransformNode("modelRoot", scene);
+      result.meshes.forEach(m => {
+        if (!m.parent) m.parent = currentRoot;
+        if (m.getTotalVertices && m.getTotalVertices() > 0) {
+          shadowGenerator.addShadowCaster(m, true);
+          m.receiveShadows = true;
         }
-    );
+      });
 
-
-/* =====================================================
-   Pattern Change Event
-===================================================== */
-
-document
-    .getElementById('wallPattern')
-    .addEventListener(
-        'change',
-        (event) => {
-
-            setWallPattern(
-                event.target.value
-            );
-
-        }
-    );
-
-
-/* =====================================================
-   Window Resize
-===================================================== */
-
-window.addEventListener(
-    'resize',
-    () => {
-
-        camera.aspect =
-            window.innerWidth /
-            window.innerHeight;
-
-        camera.updateProjectionMatrix();
-
-
-        renderer.setSize(
-            window.innerWidth,
-            window.innerHeight
-        );
-
+      frameCamera(result.meshes);
+      hideStatus();
+      console.log('shadow casters:', shadowGenerator.getShadowMap().renderList ? shadowGenerator.getShadowMap().renderList.length : 0);
+    } catch (err) {
+      console.error(err);
+      showStatus(
+        '読み込みに失敗しました。URLが正しいか、Cloudflare側でCORS（Access-Control-Allow-Origin）が許可されているかを確認してください。',
+        true
+      );
     }
-);
+  }
 
+  document.getElementById('autoRotate').addEventListener('change', (e) => {
+    camera.useAutoRotationBehavior = e.target.checked;
+  });
 
-/* =====================================================
-   Animation
-===================================================== */
+  engine.runRenderLoop(() => scene.render());
+  window.addEventListener('resize', () => engine.resize());
 
-function animate() {
-
-    requestAnimationFrame(
-        animate
-    );
-
-
-    controls.update();
-
-
-    renderer.render(
-        scene,
-        camera
-    );
-
-}
-
-
-animate();
-
-
-/* =====================================================
-   Start
-===================================================== */
-
-async function init() {
-
-    try {
-
-        /*
-            1. GLB
-        */
-
-        await loadModel();
-
-
-        /*
-            2. テクスチャー
-        */
-
-        await loadTextures();
-
-
-        /*
-            3. 初期パターンA
-        */
-
-        setWallPattern('A');
-
-
-        /*
-            完了
-        */
-
-        loadingElement.style.display =
-            'none';
-
-
-        statusElement.textContent =
-            'パターンA';
-
-
-        /*
-            Wall確認
-        */
-
-        if (!wallMesh1) {
-
-            console.warn(
-                'Wall_01 が見つかりません'
-            );
-
-        }
-
-        if (!wallMesh2) {
-
-            console.warn(
-                'Wall_02 が見つかりません'
-            );
-
-        }
-
-    }
-    catch (error) {
-
-        console.error(
-            error
-        );
-
-
-        loadingElement.style.display =
-            'none';
-
-
-        showError(
-            error.message ||
-            '読み込み中にエラーが発生しました。'
-        );
-
-    }
-
-}
-
-
-init();
-
+  // ページを開いたら固定URLのGLBを自動読み込み
+  loadModel(GLB_URL);
 </script>
 
 </body>
