@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GLB Viewer — Babylon.js</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/8.20.0/babylon.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs-loaders/8.20.0/babylonjs.loaders.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs@8.20.0/babylon.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/babylonjs-loaders@8.20.0/babylonjs.loaders.min.js"></script>
 <style>
   :root{
     --bg: #15171c;
@@ -33,34 +33,6 @@
     display: flex; gap: 8px; align-items: center;
     z-index: 10;
   }
-  .toolbar input[type="text"] {
-    flex: 1;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 14px;
-    min-width: 0;
-  }
-  .toolbar input[type="text"]::placeholder { color: var(--text-dim); }
-  .toolbar input[type="text"]:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-  .toolbar button {
-    background: var(--accent);
-    color: #0e1116;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .toolbar button:hover { filter: brightness(1.08); }
-  .toolbar button:disabled { opacity: 0.5; cursor: default; }
 
   .toggle {
     display: flex; align-items: center; gap: 6px;
@@ -108,8 +80,6 @@
 <canvas id="renderCanvas"></canvas>
 
 <div class="toolbar">
-  <input type="text" id="glbUrl" placeholder="https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb">
-  <button id="loadBtn">読み込む</button>
   <label class="toggle">
     <input type="checkbox" id="autoRotate">
     自動回転
@@ -138,9 +108,28 @@
   camera.minZ = 0.01;
 
   const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
-  hemiLight.intensity = 0.9;
+  hemiLight.intensity = 0.35;
   const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1, -2, -1), scene);
-  dirLight.intensity = 0.6;
+  dirLight.intensity = 1.0;
+  dirLight.position = new BABYLON.Vector3(20, 40, 20);
+
+  // 影を落とす地面
+  const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 50, height: 50 }, scene);
+  const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
+  groundMat.diffuseColor = new BABYLON.Color3(0.16, 0.17, 0.19);
+  groundMat.specularColor = new BABYLON.Color3(0, 0, 0);
+  ground.material = groundMat;
+  ground.receiveShadows = true;
+
+  // 影の生成
+  const shadowGenerator = new BABYLON.ShadowGenerator(2048, dirLight);
+  shadowGenerator.useBlurExponentialShadowMap = true;
+  shadowGenerator.blurKernel = 32;
+  shadowGenerator.darkness = 0.85;
+  shadowGenerator.bias = 0.001;
+  shadowGenerator.normalBias = 0.02;
+
+  const GLB_URL = "https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb";
 
   let currentRoot = null;
 
@@ -165,10 +154,21 @@
     if (!min || !max) return;
     const center = min.add(max).scale(0.5);
     const size = max.subtract(min).length();
+
     camera.target = center;
     camera.radius = size * 1.4 || 10;
     camera.lowerRadiusLimit = size * 0.02;
     camera.upperRadiusLimit = size * 6;
+
+    // 地面をモデルの底面に合わせて配置
+    const groundSize = Math.max(size * 4, 1);
+    ground.scaling.set(groundSize / 50, 1, groundSize / 50);
+    ground.position.x = center.x;
+    ground.position.z = center.z;
+    ground.position.y = min.y - size * 0.002;
+
+    // モデルのサイズに合わせて影の投影範囲を自動調整
+    dirLight.autoCalcShadowZBounds = true;
   }
 
   async function loadModel(url) {
@@ -176,10 +176,10 @@
       showStatus('URLを入力してください', true);
       return;
     }
-    document.getElementById('loadBtn').disabled = true;
     showStatus('読み込み中… 0%', false);
 
     if (currentRoot) {
+      currentRoot.getChildMeshes().forEach(m => shadowGenerator.removeShadowCaster(m));
       currentRoot.dispose();
       currentRoot = null;
     }
@@ -202,27 +202,23 @@
       currentRoot = new BABYLON.TransformNode("modelRoot", scene);
       result.meshes.forEach(m => {
         if (!m.parent) m.parent = currentRoot;
+        if (m.getTotalVertices && m.getTotalVertices() > 0) {
+          shadowGenerator.addShadowCaster(m, true);
+          m.receiveShadows = true;
+        }
       });
 
       frameCamera(result.meshes);
       hideStatus();
+      console.log('shadow casters:', shadowGenerator.getShadowMap().renderList ? shadowGenerator.getShadowMap().renderList.length : 0);
     } catch (err) {
       console.error(err);
       showStatus(
         '読み込みに失敗しました。URLが正しいか、Cloudflare側でCORS（Access-Control-Allow-Origin）が許可されているかを確認してください。',
         true
       );
-    } finally {
-      document.getElementById('loadBtn').disabled = false;
     }
   }
-
-  document.getElementById('loadBtn').addEventListener('click', () => {
-    loadModel(document.getElementById('glbUrl').value.trim());
-  });
-  document.getElementById('glbUrl').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') loadModel(document.getElementById('glbUrl').value.trim());
-  });
 
   document.getElementById('autoRotate').addEventListener('change', (e) => {
     camera.useAutoRotationBehavior = e.target.checked;
@@ -230,6 +226,9 @@
 
   engine.runRenderLoop(() => scene.render());
   window.addEventListener('resize', () => engine.resize());
+
+  // ページを開いたら固定URLのGLBを自動読み込み
+  loadModel(GLB_URL);
 </script>
 
 </body>
