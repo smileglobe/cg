@@ -1,120 +1,236 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="utf-8">
-    <title>Babylon.js GLB Viewer</title>
-    <style>
-        body { margin: 0; overflow: hidden; }
-        #info { 
-            position: absolute; 
-            top: 10px; 
-            left: 10px; 
-            z-index: 999; 
-            background: rgba(255,255,255,0.8); 
-            padding: 10px; 
-            border-radius: 5px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLB Viewer — Babylon.js</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs/8.20.0/babylon.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babylonjs-loaders/8.20.0/babylonjs.loaders.min.js"></script>
+<style>
+  :root{
+    --bg: #15171c;
+    --panel: #1d2027;
+    --border: #2b2f38;
+    --text: #e7e9ee;
+    --text-dim: #8b93a1;
+    --accent: #5b8def;
+    --danger: #e2685a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+    overflow: hidden;
+  }
+  #renderCanvas {
+    width: 100%; height: 100%; display: block; touch-action: none; outline: none;
+  }
+
+  .toolbar {
+    position: fixed; top: 16px; left: 16px; right: 16px;
+    display: flex; gap: 8px; align-items: center;
+    z-index: 10;
+  }
+  .toolbar input[type="text"] {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    min-width: 0;
+  }
+  .toolbar input[type="text"]::placeholder { color: var(--text-dim); }
+  .toolbar input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  .toolbar button {
+    background: var(--accent);
+    color: #0e1116;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .toolbar button:hover { filter: brightness(1.08); }
+  .toolbar button:disabled { opacity: 0.5; cursor: default; }
+
+  .toggle {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .toggle input { accent-color: var(--accent); }
+
+  .hint {
+    position: fixed; bottom: 16px; left: 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    z-index: 10;
+  }
+
+  .status {
+    position: fixed; top: 72px; left: 50%; transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text-dim);
+    z-index: 10;
+    display: none;
+  }
+  .status.error { border-color: var(--danger); color: var(--danger); }
+  .status.visible { display: block; }
+</style>
 </head>
 <body>
-    <div id="info">Cloudflare GLB ファイルを表示中</div>
 
-    <!-- Babylon.js と Loaders を CDN から読み込む -->
-    <script src="https://cdn.babylonjs.com/babylon.js"></script>
-    <script src="https://cdn.babylonjs.com/loaders/babylon.loaders.min.js"></script>
+<canvas id="renderCanvas"></canvas>
 
-    <!-- Canvas 要素を作成 -->
-    <canvas id="renderCanvas" width="window.innerWidth" height="window.innerHeight"></canvas>
+<div class="toolbar">
+  <input type="text" id="glbUrl" placeholder="https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb">
+  <button id="loadBtn">読み込む</button>
+  <label class="toggle">
+    <input type="checkbox" id="autoRotate">
+    自動回転
+  </label>
+</div>
 
-    <script>
-        // Canvas の参照を取得
-        const canvas = document.getElementById("renderCanvas");
+<div class="status" id="status"></div>
 
-        // Babylon.js が正しく読み込まれているか確認
-        if (typeof BABYLON === 'undefined') {
-            console.error('BABYLON is not defined! Please check the CDN script loading.');
-        } else {
-            console.log('✓ BABYLON loaded successfully');
+<div class="hint">
+  左ドラッグ：回転　　右ドラッグ／2本指：移動　　スクロール：ズーム
+</div>
+
+<script>
+  const canvas = document.getElementById('renderCanvas');
+  const engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+
+  const scene = new BABYLON.Scene(engine);
+  scene.clearColor = new BABYLON.Color4(0.082, 0.09, 0.11, 1);
+
+  const camera = new BABYLON.ArcRotateCamera(
+    "camera", -Math.PI / 2.5, Math.PI / 2.5, 10, BABYLON.Vector3.Zero(), scene
+  );
+  camera.attachControl(canvas, true);
+  camera.wheelPrecision = 30;
+  camera.lowerRadiusLimit = 0.01;
+  camera.minZ = 0.01;
+
+  const hemiLight = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(0, 1, 0), scene);
+  hemiLight.intensity = 0.9;
+  const dirLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1, -2, -1), scene);
+  dirLight.intensity = 0.6;
+
+  let currentRoot = null;
+
+  function showStatus(message, isError) {
+    const el = document.getElementById('status');
+    el.textContent = message;
+    el.className = 'status visible' + (isError ? ' error' : '');
+  }
+  function hideStatus() {
+    document.getElementById('status').className = 'status';
+  }
+
+  function frameCamera(meshes) {
+    let min = null, max = null;
+    meshes.forEach(m => {
+      if (!m.getBoundingInfo) return;
+      const bb = m.getBoundingInfo().boundingBox;
+      const bMin = bb.minimumWorld, bMax = bb.maximumWorld;
+      min = min ? BABYLON.Vector3.Minimize(min, bMin) : bMin.clone();
+      max = max ? BABYLON.Vector3.Maximize(max, bMax) : bMax.clone();
+    });
+    if (!min || !max) return;
+    const center = min.add(max).scale(0.5);
+    const size = max.subtract(min).length();
+    camera.target = center;
+    camera.radius = size * 1.4 || 10;
+    camera.lowerRadiusLimit = size * 0.02;
+    camera.upperRadiusLimit = size * 6;
+  }
+
+  async function loadModel(url) {
+    if (!url) {
+      showStatus('URLを入力してください', true);
+      return;
+    }
+    document.getElementById('loadBtn').disabled = true;
+    showStatus('読み込み中… 0%', false);
+
+    if (currentRoot) {
+      currentRoot.dispose();
+      currentRoot = null;
+    }
+
+    const lastSlash = url.lastIndexOf('/');
+    const rootUrl = lastSlash >= 0 ? url.substring(0, lastSlash + 1) : '';
+    const fileName = lastSlash >= 0 ? url.substring(lastSlash + 1) : url;
+
+    try {
+      const result = await BABYLON.SceneLoader.ImportMeshAsync(
+        '', rootUrl, fileName, scene,
+        (evt) => {
+          if (evt.lengthComputable) {
+            const pct = Math.round((evt.loaded / evt.total) * 100);
+            showStatus(`読み込み中… ${pct}%`, false);
+          }
         }
+      );
 
-        // Loaders が正しく登録されているか確認
-        if (typeof BABYLON.Tools === 'undefined' || typeof BABYLON.Tools.LoadFile === 'undefined') {
-            console.error('Loaders are not registered! Check babylon.loaders.min.js loading.');
-        } else {
-            console.log('✓ Loaders registered successfully');
-        }
+      currentRoot = new BABYLON.TransformNode("modelRoot", scene);
+      result.meshes.forEach(m => {
+        if (!m.parent) m.parent = currentRoot;
+      });
 
-        // 1. シーンとエンジンを作成
-        const engine = new BABYLON.Engine(canvas, true);
+      frameCamera(result.meshes);
+      hideStatus();
+    } catch (err) {
+      console.error(err);
+      showStatus(
+        '読み込みに失敗しました。URLが正しいか、Cloudflare側でCORS（Access-Control-Allow-Origin）が許可されているかを確認してください。',
+        true
+      );
+    } finally {
+      document.getElementById('loadBtn').disabled = false;
+    }
+  }
 
-        const createScene = function () {
-            const scene = new BABYLON.Scene(engine);
-            
-            // 背景色を設定
-            scene.clearColor = new BABYLON.Color4(0.2, 0.2, 0.3, 1);
-            
-            // カメラを作成
-            const camera = new BABYLON.ArcRotateCamera("camera", -Math.PI / 2, Math.PI / 2.5, 5, BABYLON.Vector3.Zero(), scene);
-            camera.attachControl(canvas, true);
+  document.getElementById('loadBtn').addEventListener('click', () => {
+    loadModel(document.getElementById('glbUrl').value.trim());
+  });
+  document.getElementById('glbUrl').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') loadModel(document.getElementById('glbUrl').value.trim());
+  });
 
-            // ライトを設定
-            const directionalLight = new BABYLON.DirectionalLight("dirLight", new BABYLON.Vector3(-1, -2, -1), scene);
-            directionalLight.intensity = 0.5;
+  document.getElementById('autoRotate').addEventListener('change', (e) => {
+    camera.useAutoRotationBehavior = e.target.checked;
+  });
 
-            return scene;
-        };
+  engine.runRenderLoop(() => scene.render());
+  window.addEventListener('resize', () => engine.resize());
+</script>
 
-        // 2. R2 の GLB ファイルの URL を設定
-        const glbUrl = "https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb";
-
-        // 3. GLB ファイルを読み込む（SceneLoader を使用）
-        console.log("Attempting to load GLB from:", glbUrl);
-        
-        BABYLON.SceneLoader.ImportMeshAsync("", "", glbUrl, createScene())
-            .then(function (result) {
-                console.log("✓ モデルが正常に読み込まれました");
-                result.meshes.forEach((mesh, index) => {
-                    mesh.name = "Model_" + index;
-                });
-                
-                // Inspector を開く（デバッグ用）
-                const inspector = BABYLON.GetDefaultInspector();
-                if (inspector) {
-                    console.log("Inspector opened");
-                }
-            })
-            .catch(function (error) {
-                console.error("✗ 読み込みエラー:", error);
-                console.error("Error details:", JSON.stringify(error, null, 2));
-            });
-
-        // 4. エンジンを実行
-        window.addEventListener("load", function () {
-            engine.runRenderLoop(function () {
-                scene.render();
-            });
-            
-            // ウィンドウリサイズ対応
-            window.addEventListener("resize", function () {
-                engine.resize();
-            });
-        });
-
-        // 5. シーンを作成（エラーハンドリング）
-        let scene;
-        try {
-            console.log("Creating scene...");
-            scene = createScene();
-            console.log("✓ Scene created successfully");
-        } catch (error) {
-            console.error("✗ シーンの作成に失敗:", error);
-        }
-
-        // 6. 追加のデバッグ情報
-        console.log("=== Debug Info ===");
-        console.log("Engine:", engine);
-        console.log("Scene:", scene);
-        console.log("Canvas:", canvas);
-    </script>
 </body>
 </html>
