@@ -385,6 +385,50 @@ scene.add(ambientLight);
 
 
 /*
+    Hemisphere Light
+
+    空と地面の2方向から柔らかく光を回し込み、
+    面ごとの陰影(側面が真っ黒になるの)を緩和する。
+    影の濃さ自体にはほぼ影響しない。
+*/
+
+const hemiLight =
+    new THREE.HemisphereLight(
+        0xffffff, // 空の色
+        0x666666, // 地面の色(反射光っぽさ)
+        0.6       // 強度: 0.4〜0.8くらいで調整
+    );
+
+scene.add(hemiLight);
+
+
+/*
+    Fill Light
+
+    メインのDirectionalLightと反対側から弱く当てて、
+    影になっている面のディテールを持ち上げる補助光。
+    castShadowはfalseにして、地面に落ちる本影(コントラスト)は
+    メインライトのものだけを残す。
+*/
+
+const fillLight =
+    new THREE.DirectionalLight(
+        0xffffff,
+        1.5       // 強度: メインライト(10)よりかなり弱め
+    );
+
+fillLight.position.set(
+    -20,
+    15,
+    -20
+);
+
+fillLight.castShadow = false;
+
+scene.add(fillLight);
+
+
+/*
     Directional Light
 */
 
