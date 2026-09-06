@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>GLB Architectural Viewer</title>
+<title>GLB Architectural Viewer (WebGPU)</title>
 
 <style>
     * {
@@ -98,6 +98,13 @@
         line-height: 1.5;
     }
 
+    #backend {
+        margin-top: 4px;
+        font-size: 11px;
+        font-weight: bold;
+        color: #2a7a2a;
+    }
+
     #loading {
         position: fixed;
         inset: 0;
@@ -140,16 +147,24 @@
 
 <!-- ==========================================
      Import Map
+
+     WebGPURenderer はビルドファイルが異なるため
+     "three" 自体を three.webgpu.js に向ける。
+     こうすることで three/addons/ 配下
+     (GLTFLoader, OrbitControls) が内部で
+     import している 'three' も同じインスタンスになる。
 ========================================== -->
 
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.webgpu.js",
-        "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.webgpu.js"
-      }
+<script type="importmap">
+{
+    "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.webgpu.js",
+        "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.webgpu.js",
+        "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.tsl.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
     }
-  </script>
+}
+</script>
 
 </head>
 
@@ -170,11 +185,11 @@
     <select id="wallPattern">
 
         <option value="A">
-            パターン A
+            パターンA
         </option>
 
         <option value="B">
-            パターン B
+            パターンB
         </option>
 
     </select>
@@ -184,13 +199,15 @@
     </button>
 
     <div id="status">
-        GLB 読み込み中...
+        GLB読み込み中...
     </div>
+
+    <div id="backend"></div>
 
 </div>
 
 <div id="loading">
-    3D モデル読み込み中...
+    3Dモデル読み込み中...
 </div>
 
 <div id="error"></div>
@@ -199,20 +216,28 @@
 <script type="module">
 
 /* =====================================================
-   Three.js
+   Three.js (WebGPU)
 ===================================================== */
 
-import * as THREE from 'three';
+import * as THREE from 'three/webgpu';
 
-// ✅ 修正済み - 完全な URL に変更
-import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/controls/OrbitControls.js';
+import { OrbitControls }
+    from 'three/addons/controls/OrbitControls.js';
 
-// ✅ 修正済み - 完全な URL に変更
-import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader }
+    from 'three/addons/loaders/GLTFLoader.js';
+
+/*
+    WebGPUが実際に使えるかどうかの判定用
+    (使えない場合はThree.js側が自動的に
+     WebGL2バックエンドへフォールバックする)
+*/
+import WebGPU
+    from 'three/addons/capabilities/WebGPU.js';
 
 
 /* =====================================================
-   R2 URL 設定
+   R2 URL設定
 ===================================================== */
 
 /*
@@ -220,13 +245,13 @@ import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.182.0/examples/
 */
 
 const modelUrl =
-    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/car.glb';
+    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb';
 
 
 /*
     テクスチャーのフォルダ
 
-    R2 が
+    R2が
 
     textures/
         wall_A_01.jpg
@@ -242,16 +267,16 @@ const textureBaseUrl =
 
 
 /* =====================================================
-   テクスチャー URL
+   テクスチャーURL
 ===================================================== */
 
 const textureUrls = {
 
-    // パターン A
+    // パターンA
     A1: textureBaseUrl + 'wall_A_01.jpg',
     A2: textureBaseUrl + 'wall_A_02.jpg',
 
-    // パターン B
+    // パターンB
     B1: textureBaseUrl + 'wall_B_01.jpg',
     B2: textureBaseUrl + 'wall_B_02.jpg'
 
@@ -290,11 +315,16 @@ camera.position.set(
 
 
 /* =====================================================
-   Renderer
+   Renderer (WebGPURenderer)
+
+   WebGLRendererと違い、初期化が非同期。
+   renderer.init() を await してから
+   renderer.domElementの追加やレンダーループの
+   開始を行う必要がある。
 ===================================================== */
 
 const renderer =
-    new THREE.WebGLRenderer({
+    new THREE.WebGPURenderer({
         antialias: true,
         alpha: false
     });
@@ -377,7 +407,7 @@ controls.maxDistance = 200;
 const ambientLight =
     new THREE.AmbientLight(
         0xffffff,
-        5
+        0.5
     );
 
 scene.add(ambientLight);
@@ -390,7 +420,7 @@ scene.add(ambientLight);
 const dirLight =
     new THREE.DirectionalLight(
         0xffffff,
-        1
+        1.0
     );
 
 
@@ -443,7 +473,7 @@ dirLight.shadow.camera.bottom =
 */
 
 dirLight.shadow.bias =
-    1;
+    -0.0001;
 
 
 scene.add(dirLight);
@@ -471,6 +501,9 @@ let originalTarget =
 
 const statusElement =
     document.getElementById('status');
+
+const backendElement =
+    document.getElementById('backend');
 
 const loadingElement =
     document.getElementById('loading');
@@ -516,7 +549,7 @@ function loadTexture(url) {
                 (texture) => {
 
                     /*
-                        JPG などのカラー画像
+                        JPGなどのカラー画像
                     */
 
                     texture.colorSpace =
@@ -524,10 +557,10 @@ function loadTexture(url) {
 
 
                     /*
-                        GLTF の UV 座標に合わせる
+                        GLTFのUV座標に合わせる
 
-                        Three.js の TextureLoader では
-                        GLTF のテクスチャーを差し替える
+                        Three.jsのTextureLoaderでは
+                        GLTFのテクスチャーを差し替える
                         場合 flipY=false が重要
                     */
 
@@ -659,7 +692,12 @@ function changeWallTexture(
 
 
     /*
-        MeshStandardMaterial など
+        MeshStandardMaterialなど
+
+        WebGPURendererでもこれらのマテリアルは
+        そのまま使用でき、内部でノードベースの
+        マテリアル(MeshStandardNodeMaterial等)へ
+        自動変換される。map差し替えのAPIは同じ。
     */
 
     if (
@@ -670,8 +708,8 @@ function changeWallTexture(
     ) {
 
         /*
-            UV を維持したまま
-            map だけ変更
+            UVを維持したまま
+            mapだけ変更
         */
 
         texture.flipY = false;
@@ -798,7 +836,7 @@ const gltfLoader =
 async function loadModel() {
 
     statusElement.textContent =
-        '3D モデル読み込み中...';
+        '3Dモデル読み込み中...';
 
 
     return new Promise(
@@ -821,7 +859,7 @@ async function loadModel() {
 
                     /*
                         =================================
-                        Mesh 確認
+                        Mesh確認
                         =================================
                     */
 
@@ -845,8 +883,8 @@ async function loadModel() {
 
 
                             /*
-                                Mesh / Material を
-                                Console に表示
+                                Mesh / Materialを
+                                Consoleに表示
                             */
 
                             console.log(
@@ -909,14 +947,14 @@ async function loadModel() {
 
 
                     /*
-                        モデルを Scene へ
+                        モデルをSceneへ
                     */
 
                     scene.add(model);
 
 
                     /*
-                        Wall 確認
+                        Wall確認
                     */
 
                     console.log(
@@ -972,7 +1010,7 @@ async function loadModel() {
 
 
                         statusElement.textContent =
-                            'GLB 読み込み中... ' +
+                            'GLB読み込み中... ' +
                             percent.toFixed(0) +
                             '%';
 
@@ -984,7 +1022,7 @@ async function loadModel() {
 
                     reject(
                         new Error(
-                            'GLB 読み込み失敗:\n' +
+                            'GLB読み込み失敗:\n' +
                             modelUrl
                         )
                     );
@@ -1163,14 +1201,15 @@ window.addEventListener(
 
 /* =====================================================
    Animation
+
+   WebGPURendererは初期化が非同期のため、
+   requestAnimationFrameではなく
+   renderer.setAnimationLoop()を使う。
+   こうすることでrenderer.init()完了後に
+   自動的にループが開始される。
 ===================================================== */
 
 function animate() {
-
-    requestAnimationFrame(
-        animate
-    );
-
 
     controls.update();
 
@@ -1183,9 +1222,6 @@ function animate() {
 }
 
 
-animate();
-
-
 /* =====================================================
    Start
 ===================================================== */
@@ -1193,6 +1229,21 @@ animate();
 async function init() {
 
     try {
+
+        /*
+            0. WebGPURenderer初期化
+               (WebGPUが使えない環境では
+                自動的にWebGL2backendへ
+                フォールバックする)
+        */
+
+        await renderer.init();
+
+        backendElement.textContent =
+            WebGPU.isAvailable()
+                ? 'Backend: WebGPU'
+                : 'Backend: WebGL2 (フォールバック)';
+
 
         /*
             1. GLB
@@ -1209,10 +1260,19 @@ async function init() {
 
 
         /*
-            3. 初期パターン A
+            3. 初期パターンA
         */
 
         setWallPattern('A');
+
+
+        /*
+            4. レンダーループ開始
+        */
+
+        renderer.setAnimationLoop(
+            animate
+        );
 
 
         /*
@@ -1224,11 +1284,11 @@ async function init() {
 
 
         statusElement.textContent =
-            'パターン A';
+            'パターンA';
 
 
         /*
-            Wall 確認
+            Wall確認
         */
 
         if (!wallMesh1) {
