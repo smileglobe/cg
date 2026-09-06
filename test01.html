@@ -346,8 +346,15 @@ renderer.setSize(
 
 renderer.shadowMap.enabled = true;
 
+/*
+    PCFSoftShadowMapはWebGL向けの実装が中心で、
+    WebGPUバックエンドでは正しく機能しない/
+    描画自体が崩れるケースがある。
+    WebGPURendererではVSMShadowMapが推奨。
+*/
+
 renderer.shadowMap.type =
-    THREE.PCFSoftShadowMap;
+    THREE.VSMShadowMap;
 
 
 /*
@@ -1243,6 +1250,35 @@ async function init() {
             WebGPU.isAvailable()
                 ? 'Backend: WebGPU'
                 : 'Backend: WebGL2 (フォールバック)';
+
+
+        /*
+            WebGPUの検証エラー(validation error)は
+            JavaScript例外として投げられず、
+            通常はコンソールにしか出ない。
+            uncapturederrorを拾って画面にも
+            表示できるようにしておく。
+        */
+
+        const gpuDevice =
+            renderer.backend &&
+            renderer.backend.device;
+
+        if (gpuDevice && gpuDevice.addEventListener) {
+
+            gpuDevice.addEventListener(
+                'uncapturederror',
+                (event) => {
+
+                    showError(
+                        'WebGPUエラー:\n' +
+                        event.error.message
+                    );
+
+                }
+            );
+
+        }
 
 
         /*
