@@ -220,7 +220,7 @@ import { GLTFLoader }
 */
 
 const modelUrl =
-    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/car.glb';
+    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample.glb';
 
 
 /*
@@ -414,7 +414,7 @@ scene.add(hemiLight);
 const fillLight =
     new THREE.DirectionalLight(
         0xffffff,
-        1.5       // 強度: メインライト(10)よりかなり弱め
+        2       // 強度: メインライト(10)よりかなり弱め
     );
 
 fillLight.position.set(
@@ -435,7 +435,7 @@ scene.add(fillLight);
 const dirLight =
     new THREE.DirectionalLight(
         0xffffff,
-        10
+        5
       
     );
 
