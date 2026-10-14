@@ -66,7 +66,16 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 /* ===== 設定 ===== */
 const DEFAULT_GLB_URL = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/ressample.glb'; // R2の公開URLに書き換え
 const CAMERA_NAMES = ['Camera01', 'Camera02', 'Camera03', 'Camera04', 'Camera05'];
-const MOVE_DURATION_MS = 900; // 視点移動にかける時間
+// ---- 操作速度の設定 (数値を変えるだけで調整できます) ----
+// rotate: 振り向き(回転)の速さ / zoom: ズームの速さ / pan: 平行移動の速さ
+// damping: 指を離した後の慣性(小さいほど長く滑る) / moveMs: ボタンでの視点移動にかかる時間(ms)
+const SPEED = {
+  desktop: { rotate: 0.8, zoom: 1.0, pan: 1.0, damping: 0.05, moveMs: 900 },
+  touch:   { rotate: 0.4, zoom: 0.6, pan: 0.6, damping: 0.08, moveMs: 1600 }, // スマホ・タブレット
+};
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
+const SP = IS_TOUCH ? SPEED.touch : SPEED.desktop;
+const MOVE_DURATION_MS = SP.moveMs;
 const OVERHEAD_CAMERA = 'Overhead Camera'; // このカメラ選択中は Overhead オブジェクトを非表示
 const OVERHEAD_KEYWORD = 'overhead';       // 名前にこの文字を含むオブジェクトが対象(大文字小文字は無視)
 /* ================ */
@@ -114,7 +123,10 @@ let tween = null;
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.screenSpacePanning = true; // 2本指ドラッグで画面に沿って平行移動
-controls.rotateSpeed = 0.8;
+controls.rotateSpeed = SP.rotate;
+controls.zoomSpeed = SP.zoom;
+controls.panSpeed = SP.pan;
+controls.dampingFactor = SP.damping;
 // 視点移動のアニメ中に画面を触ったら、アニメを中断して操作を優先
 renderer.domElement.addEventListener('pointerdown', () => { tween = null; });
 
