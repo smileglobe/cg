@@ -2,1322 +2,371 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>GLB Architectural Viewer</title>
-
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GLB Viewer (WebGPU)</title>
 <style>
-    * {
-        box-sizing: border-box;
-    }
+  :root { --bg:#ffffff; --fg:#222222; --accent:#2f7fa3; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font-family:"Hiragino Sans","Yu Gothic",system-ui,sans-serif; overflow:hidden;
+    overscroll-behavior:none; -webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none; user-select:none; }
+  #viewer { position:fixed; inset:0; touch-action:none; }
+  #viewer canvas { display:block; touch-action:none; }
+  #status { position:fixed; left:16px; top:calc(12px + env(safe-area-inset-top, 0px)); right:72px; max-width:420px;
+    font-size:14px; line-height:1.5; }
+  #bar { height:4px; background:#dde0e4; margin-top:6px; border-radius:2px; overflow:hidden; }
+  #bar > div { height:100%; width:0; background:var(--accent); transition:width .15s; }
+  #status.error { color:#c0392b; }
+  #status.done #bar { display:none; }
+  #backend { position:fixed; right:72px; top:calc(12px + env(safe-area-inset-top, 0px)); font-size:12px; opacity:.5; pointer-events:none; }
 
-    html,
-    body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        font-family: Arial, sans-serif;
-        background: #eeeeee;
-    }
-
-    #viewer {
-        width: 100%;
-        height: 100%;
-    }
-
-    /* -----------------------------
-       UI
-    ----------------------------- */
-
-    #ui {
-        position: fixed;
-        top: 20px;
-        left: 20px;
-        z-index: 100;
-
-        padding: 16px;
-
-        background: rgba(255,255,255,0.95);
-        border-radius: 10px;
-
-        box-shadow:
-            0 4px 20px rgba(0,0,0,0.15);
-
-        min-width: 220px;
-    }
-
-    #ui h2 {
-        margin: 0 0 12px 0;
-        font-size: 18px;
-    }
-
-    #ui label {
-        display: block;
-        margin-bottom: 6px;
-        font-size: 13px;
-        color: #444;
-    }
-
-    #wallPattern {
-        width: 100%;
-        padding: 9px;
-
-        border: 1px solid #cccccc;
-        border-radius: 6px;
-
-        background: white;
-        font-size: 14px;
-
-        cursor: pointer;
-    }
-
-    #resetCamera {
-        width: 100%;
-        margin-top: 12px;
-
-        padding: 9px;
-
-        border: none;
-        border-radius: 6px;
-
-        background: #333;
-        color: white;
-
-        cursor: pointer;
-    }
-
-    #resetCamera:hover {
-        background: #555;
-    }
-
-    #status {
-        margin-top: 10px;
-        font-size: 12px;
-        color: #666;
-        line-height: 1.5;
-    }
-
-    #loading {
-        position: fixed;
-        inset: 0;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        background: #eeeeee;
-
-        z-index: 200;
-
-        font-size: 16px;
-        color: #444;
-    }
-
-    #error {
-        position: fixed;
-
-        top: 20px;
-        right: 20px;
-
-        max-width: 400px;
-
-        padding: 15px;
-
-        background: #ffdddd;
-        color: #990000;
-
-        border: 1px solid #dd9999;
-        border-radius: 8px;
-
-        z-index: 300;
-
-        display: none;
-
-        white-space: pre-wrap;
-    }
+  #fs { position:fixed; top:calc(10px + env(safe-area-inset-top, 0px)); right:calc(12px + env(safe-area-inset-right, 0px));
+    width:44px; height:44px; display:none; align-items:center; justify-content:center; padding:0;
+    color:var(--fg); background:#f0f1f3; border:1px solid #c5c9cf; border-radius:22px; cursor:pointer;
+    touch-action:manipulation; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  #fs:hover { background:#e2e5e9; }
+  #fs:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  #fs svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  #fs .ico-exit { display:none; }
+  #fs[aria-pressed="true"] .ico-enter { display:none; }
+  #fs[aria-pressed="true"] .ico-exit { display:block; }
+  body.immersive #cams, body.immersive #status, body.immersive #backend { display:none !important; }
+  body.immersive #fs { opacity:.55; }
+  #toast { position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%);
+    max-width:min(88vw, 420px); padding:12px 16px; border-radius:10px; background:rgba(30,33,38,.92); color:#fff;
+    font-size:14px; line-height:1.55; opacity:0; pointer-events:none; transition:opacity .3s; text-align:center; }
+  #toast.show { opacity:1; }
+  #cams { position:fixed; left:0; right:0; bottom:0; display:flex; gap:8px; overflow-x:auto;
+    justify-content:safe center; touch-action:pan-x; scrollbar-width:none;
+    padding:10px calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
+    background:linear-gradient(to top, rgba(255,255,255,.92) 55%, rgba(255,255,255,0)); }
+  #cams::-webkit-scrollbar { display:none; }
+  #cams button { display:none; flex:0 0 auto; min-height:44px; padding:0 18px; white-space:nowrap;
+    font:inherit; font-size:15px; color:var(--fg); background:#f0f1f3; border:1px solid #c5c9cf;
+    border-radius:22px; cursor:pointer; touch-action:manipulation; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  #cams button:hover { background:#e2e5e9; }
+  #cams button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  #cams button[aria-pressed="true"] { background:var(--accent); border-color:var(--accent); color:#ffffff; }
 </style>
-
-<!-- ==========================================
-     Import Map
-========================================== -->
+</head>
+<body>
+<div id="viewer"></div>
+<div id="cams" role="group" aria-label="視点切り替え">
+  <button type="button" data-cam="Overhead Camera">Overhead Camera</button>
+  <button type="button" data-cam="Camera01">Camera01</button>
+  <button type="button" data-cam="Camera02">Camera02</button>
+  <button type="button" data-cam="Camera03">Camera03</button>
+  <button type="button" data-cam="Camera04">Camera04</button>
+  <button type="button" data-cam="Camera05">Camera05</button>
+</div>
+<button id="fs" type="button" aria-label="フルスクリーン" aria-pressed="false">
+  <svg class="ico-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+  <svg class="ico-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+</button>
+<div id="toast" role="status"></div>
+<div id="backend"></div>
+<div id="status"><span id="msg">初期化中…</span><div id="bar"><div></div></div></div>
 
 <script type="importmap">
 {
-    "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
-    }
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.webgpu.js",
+    "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.webgpu.js",
+    "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.172.0/build/three.tsl.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/"
+  }
 }
 </script>
-
-</head>
-
-<body>
-
-<div id="viewer"></div>
-
-<!-- UI -->
-
-<div id="ui">
-
-    <h2>壁材変更</h2>
-
-    <label for="wallPattern">
-        テクスチャーパターン
-    </label>
-
-    <select id="wallPattern">
-
-        <option value="A">
-            パターンA
-        </option>
-
-        <option value="B">
-            パターンB
-        </option>
-
-    </select>
-
-    <button id="resetCamera">
-        カメラリセット
-    </button>
-
-    <div id="status">
-        GLB読み込み中...
-    </div>
-
-</div>
-
-<div id="loading">
-    3Dモデル読み込み中...
-</div>
-
-<div id="error"></div>
-
 
 <script type="module">
+import * as THREE from 'three/webgpu';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-/* =====================================================
-   Three.js
-===================================================== */
-
-import * as THREE from 'three';
-
-import { OrbitControls }
-    from 'three/addons/controls/OrbitControls.js';
-
-import { GLTFLoader }
-    from 'three/addons/loaders/GLTFLoader.js';
-
-
-/* =====================================================
-   R2 URL設定
-===================================================== */
-
-/*
-    GLB
-*/
-
-const modelUrl =
-    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/condo.glb';
-
-
-/*
-    テクスチャーのフォルダ
-
-    R2が
-
-    textures/
-        wall_A_01.jpg
-        wall_A_02.jpg
-        wall_B_01.jpg
-        wall_B_02.jpg
-
-    の構成になっている場合
-*/
-
-const textureBaseUrl =
-    'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/sample01Texture/';
-
-
-/* =====================================================
-   テクスチャーURL
-===================================================== */
-
-const textureUrls = {
-
-    // パターンA
-    A1: textureBaseUrl + 'wall_A_01.jpg',
-    A2: textureBaseUrl + 'wall_A_02.jpg',
-
-    // パターンB
-    B1: textureBaseUrl + 'wall_B_01.jpg',
-    B2: textureBaseUrl + 'wall_B_02.jpg'
-
+/* ===== 設定 ===== */
+const DEFAULT_GLB_URL = 'https://pub-281458c844204a28b7739a26e30e848b.r2.dev/condo.glb'; // R2の公開URLに書き換え
+const CAMERA_NAMES = ['Camera01', 'Camera02', 'Camera03', 'Camera04', 'Camera05'];
+// ---- 操作速度の設定 (数値を変えるだけで調整できます) ----
+// rotate: 振り向き(回転)の速さ / zoom: ズームの速さ / pan: 平行移動の速さ
+// damping: 指を離した後の慣性(小さいほど長く滑る) / moveMs: ボタンでの視点移動にかかる時間(ms)
+const SPEED = {
+  desktop: { rotate: 0.8, zoom: 1.0, pan: 1.0, damping: 0.05, moveMs: 900 },
+  touch:   { rotate: 0.4, zoom: 0.6, pan: 0.6, damping: 0.08, moveMs: 1600 }, // スマホ・タブレット
 };
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches;
+const SP = IS_TOUCH ? SPEED.touch : SPEED.desktop;
+const MOVE_DURATION_MS = SP.moveMs;
+const OVERHEAD_CAMERA = 'Overhead Camera'; // このカメラ選択中は Overhead オブジェクトを非表示
+const OVERHEAD_KEYWORD = 'overhead';       // 名前にこの文字を含むオブジェクトが対象(大文字小文字は無視)
+/* ================ */
 
+// three.js は名前の空白を _ に変換するため、空白・_ を無視し小文字化して比較する
+const norm = (s) => (s || '').toLowerCase().replace(/[\s_]+/g, '');
 
-/* =====================================================
-   Scene
-===================================================== */
+const params = new URLSearchParams(location.search);
+const GLB_URL = params.get('url') || DEFAULT_GLB_URL;
+
+const container = document.getElementById('viewer');
+const statusEl = document.getElementById('status');
+const msgEl = document.getElementById('msg');
+const barEl = document.querySelector('#bar > div');
+const buttons = [...document.querySelectorAll('#cams button')];
+
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, matchMedia('(pointer: coarse)').matches ? 1.5 : 2)); // スマホは負荷軽減
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+container.appendChild(renderer.domElement);
+
+try {
+  await renderer.init();
+} catch (e) {
+  console.error(e);
+  statusEl.classList.add('error');
+  msgEl.textContent = 'レンダラーを初期化できませんでした。ブラウザの WebGPU / WebGL2 対応を確認してください。';
+  throw e;
+}
+document.getElementById('backend').textContent =
+  renderer.backend?.isWebGPUBackend ? 'WebGPU' : 'WebGL2 (fallback)';
 
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xffffff);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+sun.position.set(3, 5, 4);
+scene.add(sun);
 
+const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.01, 1000);
+camera.position.set(2, 1.5, 3);
 
-scene.background =
-    new THREE.Color(0xf2f2f2);
+let tween = null;
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.screenSpacePanning = true; // 2本指ドラッグで画面に沿って平行移動
+controls.rotateSpeed = SP.rotate;
+controls.zoomSpeed = SP.zoom;
+controls.panSpeed = SP.pan;
+controls.dampingFactor = SP.damping;
+// 視点移動のアニメ中に画面を触ったら、アニメを中断して操作を優先
+renderer.domElement.addEventListener('pointerdown', () => { tween = null; });
 
+const draco = new DRACOLoader();
+draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.172.0/examples/jsm/libs/draco/');
+const loader = new GLTFLoader();
+loader.setDRACOLoader(draco);
 
-/* =====================================================
-   Camera
-===================================================== */
+let mixer = null;
+const clock = new THREE.Clock();
 
-const camera =
-    new THREE.PerspectiveCamera(
-        45,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-    );
+function fitCameraToObject(obj) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+  const dist = (maxDim / 2) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 1.6;
+  obj.position.sub(center);
+  camera.position.set(dist * 0.7, dist * 0.5, dist);
+  camera.near = maxDim / 100;
+  camera.far = maxDim * 100;
+  camera.updateProjectionMatrix();
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
 
+// 埋め込みカメラから「位置・向き・画角・注視点」を取り出す
+function poseOf(cam, model) {
+  cam.updateWorldMatrix(true, false);
+  const pos = new THREE.Vector3();
+  const quat = new THREE.Quaternion();
+  cam.matrixWorld.decompose(pos, quat, new THREE.Vector3());
+  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
+  const center = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+  const dist = Math.max(pos.distanceTo(center), 0.1);
+  return {
+    pos, quat,
+    target: pos.clone().addScaledVector(dir, dist),
+    fov: cam.isPerspectiveCamera ? cam.fov : camera.fov,
+    near: cam.near, far: cam.far,
+  };
+}
 
-camera.position.set(
-    7,
-    8,
-    7
-);
+function moveTo(pose, animate = true) {
+  camera.near = pose.near;
+  camera.far = pose.far;
+  if (!animate) {
+    camera.position.copy(pose.pos);
+    camera.quaternion.copy(pose.quat);
+    camera.fov = pose.fov;
+    camera.updateProjectionMatrix();
+    controls.target.copy(pose.target);
+    controls.update();
+    return;
+  }
+  tween = {
+    t0: performance.now(),
+    from: {
+      pos: camera.position.clone(),
+      quat: camera.quaternion.clone(),
+      fov: camera.fov,
+      target: controls.target.clone(),
+    },
+    to: pose,
+  };
+}
 
+function stepTween(now) {
+  const k = Math.min((now - tween.t0) / MOVE_DURATION_MS, 1);
+  const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; // easeInOutCubic
+  const { from, to } = tween;
+  camera.position.lerpVectors(from.pos, to.pos, e);
+  camera.quaternion.slerpQuaternions(from.quat, to.quat, e);
+  camera.fov = THREE.MathUtils.lerp(from.fov, to.fov, e);
+  camera.updateProjectionMatrix();
+  controls.target.lerpVectors(from.target, to.target, e);
+  if (k >= 1) {
+    tween = null;
+    controls.target.copy(to.target);
+    controls.update();
+  }
+}
 
-/* =====================================================
-   Renderer
-===================================================== */
+msgEl.textContent = 'ダウンロード中…';
+loader.load(
+  GLB_URL,
+  (gltf) => {
+    const model = gltf.scene;
+    scene.add(model);
+    scene.updateMatrixWorld(true);
 
-const renderer =
-    new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: false
+    // Camera01〜05 のうち、GLBに存在するものだけボタンを表示(なければ非表示のまま)
+    const poses = new Map();
+    for (const btn of buttons) {
+      const name = norm(btn.dataset.cam);
+      const cam = gltf.cameras.find((c) => norm(c.name) === name);
+      if (cam) {
+        poses.set(btn, poseOf(cam, model));
+        btn.style.display = 'block';
+      }
+    }
+
+    // 名前に "Overhead" を含むオブジェクト(カメラ自体は除く)
+    const overheadObjects = [];
+    model.traverse((o) => {
+      if (!o.isCamera && norm(o.name).includes(OVERHEAD_KEYWORD)) overheadObjects.push(o);
     });
 
+    const select = (btn, animate) => {
+      buttons.forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      moveTo(poses.get(btn), animate);
+      // Overhead Camera なら非表示、それ以外のカメラなら表示
+      const hide = norm(btn.dataset.cam) === norm(OVERHEAD_CAMERA);
+      overheadObjects.forEach((o) => { o.visible = !hide; });
+    };
 
-renderer.setPixelRatio(
-    Math.min(window.devicePixelRatio, 2)
+    if (poses.size) {
+      buttons.forEach((btn) => {
+        if (poses.has(btn)) btn.addEventListener('click', () => select(btn, true));
+      });
+      // 初期表示: ?camera=Camera03 があればそれ、なければ最初に存在するカメラ
+      const q = norm(params.get('camera'));
+      const first = buttons.find((b) => poses.has(b) && q && norm(b.dataset.cam) === q)
+                 || buttons.find((b) => poses.has(b));
+      select(first, false);
+    } else {
+      fitCameraToObject(model); // 対応カメラが無ければ自動フィット(ボタンは非表示)
+    }
+
+    if (gltf.animations.length) {
+      mixer = new THREE.AnimationMixer(model);
+      gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+    }
+    msgEl.textContent = '';
+    statusEl.classList.add('done');
+  },
+  (e) => {
+    if (e.lengthComputable) {
+      const p = Math.round((e.loaded / e.total) * 100);
+      msgEl.textContent = `ダウンロード中… ${p}%`;
+      barEl.style.width = p + '%';
+    } else {
+      msgEl.textContent = `ダウンロード中… ${(e.loaded / 1048576).toFixed(1)} MB`;
+    }
+  },
+  (err) => {
+    console.error(err);
+    statusEl.classList.add('error');
+    msgEl.textContent = 'GLBを読み込めませんでした。URLと、R2バケットのCORS設定を確認してください。';
+  }
 );
 
-renderer.setSize(
-    window.innerWidth,
-    window.innerHeight
-);
-
-
-/*
-    影を有効化
-*/
-
-renderer.shadowMap.enabled = true;
-
-renderer.shadowMap.type =
-    THREE.PCFSoftShadowMap;
-
-
-/*
-    色空間
-*/
-
-renderer.outputColorSpace =
-    THREE.SRGBColorSpace;
-
-
-/*
-    Tone Mapping
-*/
-
-renderer.toneMapping =
-    THREE.ACESFilmicToneMapping;
-
-renderer.toneMappingExposure = 1.0;
-
-
-document
-    .getElementById('viewer')
-    .appendChild(renderer.domElement);
-
-
-/* =====================================================
-   Controls
-===================================================== */
-
-const controls =
-    new OrbitControls(
-        camera,
-        renderer.domElement
-    );
-
-
-controls.enableDamping = true;
-
-controls.dampingFactor = 0.05;
-
-controls.minDistance = 1;
-
-controls.maxDistance = 200;
-
-
-/* =====================================================
-   Lights
-===================================================== */
-
-
-/*
-    Ambient Light
-
-    数値を下げると影が濃くなる
-*/
-
-const ambientLight =
-    new THREE.AmbientLight(
-        0xffffff,
-        0.01
-   
-    );
-
-scene.add(ambientLight);
-
-
-/*
-    Hemisphere Light
-
-    空と地面の2方向から柔らかく光を回し込み、
-    面ごとの陰影(側面が真っ黒になるの)を緩和する。
-    影の濃さ自体にはほぼ影響しない。
-*/
-
-const hemiLight =
-    new THREE.HemisphereLight(
-        0xffffff, // 空の色
-        0x666666, // 地面の色(反射光っぽさ)
-        0.8       // 強度: 0.4〜0.8くらいで調整
-    );
-
-scene.add(hemiLight);
-
-
-/*
-    Fill Light
-
-    メインのDirectionalLightと反対側から弱く当てて、
-    影になっている面のディテールを持ち上げる補助光。
-    castShadowはfalseにして、地面に落ちる本影(コントラスト)は
-    メインライトのものだけを残す。
-*/
-
-const fillLight =
-    new THREE.DirectionalLight(
-        0xffffff,
-        2       // 強度: メインライト(10)よりかなり弱め
-    );
-
-fillLight.position.set(
-    -20,
-    15,
-    -20
-);
-
-fillLight.castShadow = false;
-
-scene.add(fillLight);
-
-
-/*
-    Directional Light
-*/
-
-const dirLight =
-    new THREE.DirectionalLight(
-        0xffffff,
-        5
-      
-    );
-
-
-dirLight.position.set(
-    20,
-    30,
-    20
-);
-
-
-dirLight.castShadow = true;
-
-
-/*
-    Shadow Map
-*/
-
-dirLight.shadow.mapSize.width =
-    2048;
-
-dirLight.shadow.mapSize.height =
-    2048;
-
-
-/*
-    Shadow Camera
-*/
-
-dirLight.shadow.camera.near =
-    0.5;
-
-dirLight.shadow.camera.far =
-    100;
-
-dirLight.shadow.camera.left =
-    -30;
-
-dirLight.shadow.camera.right =
-    30;
-
-dirLight.shadow.camera.top =
-    30;
-
-dirLight.shadow.camera.bottom =
-    -30;
-
-
-/*
-    Shadow Bias
-*/
-
-dirLight.shadow.bias =
-    -0.0001;
-
-
-scene.add(dirLight);
-
-
-/* =====================================================
-   Variables
-===================================================== */
-
-let wallMesh1 = null;
-let wallMesh2 = null;
-
-let textures = {};
-
-let originalCameraPosition =
-    new THREE.Vector3();
-
-let originalTarget =
-    new THREE.Vector3();
-
-
-/* =====================================================
-   UI
-===================================================== */
-
-const statusElement =
-    document.getElementById('status');
-
-const loadingElement =
-    document.getElementById('loading');
-
-const errorElement =
-    document.getElementById('error');
-
-
-/* =====================================================
-   Error
-===================================================== */
-
-function showError(message) {
-
-    console.error(message);
-
-    errorElement.textContent =
-        message;
-
-    errorElement.style.display =
-        'block';
-
+const onResize = () => {
+  camera.aspect = container.clientWidth / container.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(container.clientWidth, container.clientHeight);
+};
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
+
+// ---- フルスクリーン切り替え ----
+// ・対応ブラウザ(PC / Android / iPad): 本物のフルスクリーン
+// ・iPhone の Safari(非対応): 操作ボタン類を隠して 3D 表示だけにする「没入モード」
+// ・ホーム画面から開いた場合(すでに全画面): ボタンを表示しない
+const fsBtn = document.getElementById('fs');
+const toastEl = document.getElementById('toast');
+const root = document.documentElement;
+const reqFs = root.requestFullscreen || root.webkitRequestFullscreen;
+const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+const setFsUi = (on) => {
+  fsBtn.setAttribute('aria-pressed', String(on));
+  fsBtn.setAttribute('aria-label', on ? 'フルスクリーン終了' : 'フルスクリーン');
+  setTimeout(onResize, 100);
+};
+let toastTimer = null;
+const showToast = (text) => {
+  toastEl.textContent = text;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 5000);
+};
+
+if (!standalone) {
+  fsBtn.style.display = 'flex';
+  if (reqFs && exitFs) {
+    fsBtn.addEventListener('click', async () => {
+      try {
+        if (fsElement()) await exitFs.call(document);
+        else await reqFs.call(root);
+      } catch (e) { console.warn('フルスクリーン切り替えに失敗:', e); }
+    });
+    const onFsChange = () => setFsUi(!!fsElement());
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+  } else {
+    let told = false;
+    fsBtn.addEventListener('click', () => {
+      const on = document.body.classList.toggle('immersive');
+      setFsUi(on);
+      if (on && !told) {
+        told = true;
+        showToast('ボタン類を隠しました。右上のボタンで戻せます。アドレスバーも消すには、共有ボタン →「ホーム画面に追加」から開いてください。');
+      }
+    });
+  }
 }
 
-
-/* =====================================================
-   Texture Loader
-===================================================== */
-
-const textureLoader =
-    new THREE.TextureLoader();
-
-
-function loadTexture(url) {
-
-    return new Promise(
-        (resolve, reject) => {
-
-            textureLoader.load(
-
-                url,
-
-                (texture) => {
-
-                    /*
-                        JPGなどのカラー画像
-                    */
-
-                    texture.colorSpace =
-                        THREE.SRGBColorSpace;
-
-
-                    /*
-                        GLTFのUV座標に合わせる
-
-                        Three.jsのTextureLoaderでは
-                        GLTFのテクスチャーを差し替える
-                        場合 flipY=false が重要
-                    */
-
-                    texture.flipY = false;
-
-
-                    /*
-                        繰り返し
-                    */
-
-                    texture.wrapS =
-                        THREE.RepeatWrapping;
-
-                    texture.wrapT =
-                        THREE.RepeatWrapping;
-
-
-                    texture.needsUpdate =
-                        true;
-
-
-                    resolve(texture);
-
-                },
-
-                undefined,
-
-                (error) => {
-
-                    reject(
-                        new Error(
-                            'テクスチャー読み込み失敗:\n' +
-                            url
-                        )
-                    );
-
-                }
-
-            );
-
-        }
-    );
-
-}
-
-
-/* =====================================================
-   Load All Textures
-===================================================== */
-
-async function loadTextures() {
-
-    statusElement.textContent =
-        'テクスチャー読み込み中...';
-
-
-    try {
-
-        textures.A1 =
-            await loadTexture(
-                textureUrls.A1
-            );
-
-        textures.A2 =
-            await loadTexture(
-                textureUrls.A2
-            );
-
-        textures.B1 =
-            await loadTexture(
-                textureUrls.B1
-            );
-
-        textures.B2 =
-            await loadTexture(
-                textureUrls.B2
-            );
-
-
-        console.log(
-            'All textures loaded',
-            textures
-        );
-
-    }
-    catch (error) {
-
-        showError(
-            error.message
-        );
-
-        throw error;
-
-    }
-
-}
-
-
-/* =====================================================
-   Change Texture
-===================================================== */
-
-function changeWallTexture(
-    mesh,
-    texture
-) {
-
-    if (!mesh) {
-
-        console.warn(
-            'Wall mesh not found'
-        );
-
-        return;
-
-    }
-
-
-    if (!mesh.material) {
-
-        console.warn(
-            'Material not found:',
-            mesh.name
-        );
-
-        return;
-
-    }
-
-
-    /*
-        MeshStandardMaterialなど
-    */
-
-    if (
-        mesh.material.isMeshStandardMaterial ||
-        mesh.material.isMeshPhysicalMaterial ||
-        mesh.material.isMeshPhongMaterial ||
-        mesh.material.isMeshLambertMaterial
-    ) {
-
-        /*
-            UVを維持したまま
-            mapだけ変更
-        */
-
-        texture.flipY = false;
-
-        texture.colorSpace =
-            THREE.SRGBColorSpace;
-
-
-        mesh.material.map =
-            texture;
-
-
-        mesh.material.needsUpdate =
-            true;
-
-
-        console.log(
-            'Texture changed:',
-            mesh.name,
-            mesh.material.name
-        );
-
-    }
-
-}
-
-
-/* =====================================================
-   Change Wall Pattern
-===================================================== */
-
-function setWallPattern(pattern) {
-
-    console.log(
-        'Change pattern:',
-        pattern
-    );
-
-
-    if (!wallMesh1 || !wallMesh2) {
-
-        console.warn(
-            'Wall mesh is not ready'
-        );
-
-        return;
-
-    }
-
-
-    /*
-        =========================
-        Pattern A
-        =========================
-
-        Wall_01
-        ↓
-        wall_A_01.jpg
-
-        Wall_02
-        ↓
-        wall_A_02.jpg
-    */
-
-    if (pattern === 'A') {
-
-        changeWallTexture(
-            wallMesh1,
-            textures.A1
-        );
-
-        changeWallTexture(
-            wallMesh2,
-            textures.A2
-        );
-
-    }
-
-
-    /*
-        =========================
-        Pattern B
-        =========================
-
-        Wall_01
-        ↓
-        wall_B_01.jpg
-
-        Wall_02
-        ↓
-        wall_B_02.jpg
-    */
-
-    if (pattern === 'B') {
-
-        changeWallTexture(
-            wallMesh1,
-            textures.B1
-        );
-
-        changeWallTexture(
-            wallMesh2,
-            textures.B2
-        );
-
-    }
-
-
-    statusElement.textContent =
-        '現在のパターン：' +
-        pattern;
-
-}
-
-
-/* =====================================================
-   GLB Loader
-===================================================== */
-
-const gltfLoader =
-    new GLTFLoader();
-
-
-async function loadModel() {
-
-    statusElement.textContent =
-        '3Dモデル読み込み中...';
-
-
-    return new Promise(
-        (resolve, reject) => {
-
-            gltfLoader.load(
-
-                modelUrl,
-
-                (gltf) => {
-
-                    const model =
-                        gltf.scene;
-
-
-                    console.log(
-                        'GLB loaded'
-                    );
-
-
-                    /*
-                        =================================
-                        Mesh確認
-                        =================================
-                    */
-
-                    model.traverse(
-                        (object) => {
-
-                            if (!object.isMesh) {
-                                return;
-                            }
-
-
-                            /*
-                                影
-                            */
-
-                            object.castShadow =
-                                true;
-
-                            object.receiveShadow =
-                                true;
-
-
-                            /*
-                                Mesh / Materialを
-                                Consoleに表示
-                            */
-
-                            console.log(
-                                'MESH:',
-                                object.name,
-                                'MATERIAL:',
-                                object.material?.name,
-                                'UV:',
-                                !!object.geometry
-                                    .attributes
-                                    .uv
-                            );
-
-
-                            /*
-                                =============================
-                                Wall_01
-                                =============================
-                            */
-
-                            if (
-                                object.name ===
-                                'Wall_01'
-                            ) {
-
-                                wallMesh1 =
-                                    object;
-
-                                console.log(
-                                    'Wall_01 FOUND',
-                                    object
-                                );
-
-                            }
-
-
-                            /*
-                                =============================
-                                Wall_02
-                                =============================
-                            */
-
-                            if (
-                                object.name ===
-                                'Wall_02'
-                            ) {
-
-                                wallMesh2 =
-                                    object;
-
-                                console.log(
-                                    'Wall_02 FOUND',
-                                    object
-                                );
-
-                            }
-
-                        }
-                    );
-
-
-                    /*
-                        モデルをSceneへ
-                    */
-
-                    scene.add(model);
-
-
-                    /*
-                        Wall確認
-                    */
-
-                    console.log(
-                        'wallMesh1:',
-                        wallMesh1
-                    );
-
-                    console.log(
-                        'wallMesh2:',
-                        wallMesh2
-                    );
-
-
-                    /*
-                        カメラ自動調整
-                    */
-
-                    fitCameraToObject(
-                        model
-                    );
-
-
-                    /*
-                        初期カメラ保存
-                    */
-
-                    originalCameraPosition.copy(
-                        camera.position
-                    );
-
-                    originalTarget.copy(
-                        controls.target
-                    );
-
-
-                    resolve(
-                        model
-                    );
-
-                },
-
-                (progress) => {
-
-                    if (
-                        progress.total > 0
-                    ) {
-
-                        const percent =
-                            (
-                                progress.loaded /
-                                progress.total
-                            ) * 100;
-
-
-                        statusElement.textContent =
-                            'GLB読み込み中... ' +
-                            percent.toFixed(0) +
-                            '%';
-
-                    }
-
-                },
-
-                (error) => {
-
-                    reject(
-                        new Error(
-                            'GLB読み込み失敗:\n' +
-                            modelUrl
-                        )
-                    );
-
-                }
-
-            );
-
-        }
-    );
-
-}
-
-
-/* =====================================================
-   Camera Fit
-===================================================== */
-
-function fitCameraToObject(
-    object
-) {
-
-    const box =
-        new THREE.Box3()
-            .setFromObject(object);
-
-
-    const size =
-        box.getSize(
-            new THREE.Vector3()
-        );
-
-
-    const center =
-        box.getCenter(
-            new THREE.Vector3()
-        );
-
-
-    const maxSize =
-        Math.max(
-            size.x,
-            size.y,
-            size.z
-        );
-
-
-    const fitHeightDistance =
-        maxSize /
-        (
-            2 *
-            Math.tan(
-                THREE.MathUtils.degToRad(
-                    camera.fov * 0.5
-                )
-            )
-        );
-
-
-    const fitWidthDistance =
-        fitHeightDistance /
-        camera.aspect;
-
-
-    const distance =
-        1.2 *
-        Math.max(
-            fitHeightDistance,
-            fitWidthDistance
-        );
-
-
-    /*
-        カメラ位置
-    */
-
-    camera.position.set(
-        center.x + distance,
-        center.y + distance * 0.6,
-        center.z + distance
-    );
-
-
-    /*
-        注視点
-    */
-
-    controls.target.copy(
-        center
-    );
-
-
-    camera.near =
-        Math.max(
-            0.01,
-            distance / 100
-        );
-
-
-    camera.far =
-        distance * 100;
-
-
-    camera.updateProjectionMatrix();
-
-    controls.update();
-
-}
-
-
-/* =====================================================
-   Camera Reset
-===================================================== */
-
-document
-    .getElementById('resetCamera')
-    .addEventListener(
-        'click',
-        () => {
-
-            camera.position.copy(
-                originalCameraPosition
-            );
-
-            controls.target.copy(
-                originalTarget
-            );
-
-            controls.update();
-
-        }
-    );
-
-
-/* =====================================================
-   Pattern Change Event
-===================================================== */
-
-document
-    .getElementById('wallPattern')
-    .addEventListener(
-        'change',
-        (event) => {
-
-            setWallPattern(
-                event.target.value
-            );
-
-        }
-    );
-
-
-/* =====================================================
-   Window Resize
-===================================================== */
-
-window.addEventListener(
-    'resize',
-    () => {
-
-        camera.aspect =
-            window.innerWidth /
-            window.innerHeight;
-
-        camera.updateProjectionMatrix();
-
-
-        renderer.setSize(
-            window.innerWidth,
-            window.innerHeight
-        );
-
-    }
-);
-
-
-/* =====================================================
-   Animation
-===================================================== */
-
-function animate() {
-
-    requestAnimationFrame(
-        animate
-    );
-
-
-    controls.update();
-
-
-    renderer.render(
-        scene,
-        camera
-    );
-
-}
-
-
-animate();
-
-
-/* =====================================================
-   Start
-===================================================== */
-
-async function init() {
-
-    try {
-
-        /*
-            1. GLB
-        */
-
-        await loadModel();
-
-
-        /*
-            2. テクスチャー
-        */
-
-        await loadTextures();
-
-
-        /*
-            3. 初期パターンA
-        */
-
-        setWallPattern('A');
-
-
-        /*
-            完了
-        */
-
-        loadingElement.style.display =
-            'none';
-
-
-        statusElement.textContent =
-            'パターンA';
-
-
-        /*
-            Wall確認
-        */
-
-        if (!wallMesh1) {
-
-            console.warn(
-                'Wall_01 が見つかりません'
-            );
-
-        }
-
-        if (!wallMesh2) {
-
-            console.warn(
-                'Wall_02 が見つかりません'
-            );
-
-        }
-
-    }
-    catch (error) {
-
-        console.error(
-            error
-        );
-
-
-        loadingElement.style.display =
-            'none';
-
-
-        showError(
-            error.message ||
-            '読み込み中にエラーが発生しました。'
-        );
-
-    }
-
-}
-
-
-init();
-
+renderer.setAnimationLoop((now) => {
+  if (mixer) mixer.update(clock.getDelta());
+  if (tween) stepTween(now);   // 視点移動中はOrbitControlsの更新を止める
+  else controls.update();
+  renderer.render(scene, camera);
+});
 </script>
-
 </body>
 </html>
