@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GLB Viewer (WebGPU)</title>
 <style>
@@ -32,6 +33,12 @@
   #fs .ico-exit { display:none; }
   #fs[aria-pressed="true"] .ico-enter { display:none; }
   #fs[aria-pressed="true"] .ico-exit { display:block; }
+  body.immersive #cams, body.immersive #status, body.immersive #backend { display:none !important; }
+  body.immersive #fs { opacity:.55; }
+  #toast { position:fixed; left:50%; bottom:calc(24px + env(safe-area-inset-bottom, 0px)); transform:translateX(-50%);
+    max-width:min(88vw, 420px); padding:12px 16px; border-radius:10px; background:rgba(30,33,38,.92); color:#fff;
+    font-size:14px; line-height:1.55; opacity:0; pointer-events:none; transition:opacity .3s; text-align:center; }
+  #toast.show { opacity:1; }
   #cams { position:fixed; left:0; right:0; bottom:0; display:flex; gap:8px; overflow-x:auto;
     justify-content:safe center; touch-action:pan-x; scrollbar-width:none;
     padding:10px calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
@@ -59,6 +66,7 @@
   <svg class="ico-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
   <svg class="ico-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
 </button>
+<div id="toast" role="status"></div>
 <div id="backend"></div>
 <div id="status"><span id="msg">初期化中…</span><div id="bar"><div></div></div></div>
 
@@ -304,30 +312,53 @@ window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
 
 // ---- フルスクリーン切り替え ----
-// iPhone の Safari はページ全体のフルスクリーンに非対応のため、その場合はボタンを表示しません
-// (「ホーム画面に追加」して開くと、アドレスバーなしで表示できます)
+// ・対応ブラウザ(PC / Android / iPad): 本物のフルスクリーン
+// ・iPhone の Safari(非対応): 操作ボタン類を隠して 3D 表示だけにする「没入モード」
+// ・ホーム画面から開いた場合(すでに全画面): ボタンを表示しない
 const fsBtn = document.getElementById('fs');
+const toastEl = document.getElementById('toast');
 const root = document.documentElement;
 const reqFs = root.requestFullscreen || root.webkitRequestFullscreen;
 const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
 const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
-if (reqFs && exitFs) {
+const setFsUi = (on) => {
+  fsBtn.setAttribute('aria-pressed', String(on));
+  fsBtn.setAttribute('aria-label', on ? 'フルスクリーン終了' : 'フルスクリーン');
+  setTimeout(onResize, 100);
+};
+let toastTimer = null;
+const showToast = (text) => {
+  toastEl.textContent = text;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 5000);
+};
+
+if (!standalone) {
   fsBtn.style.display = 'flex';
-  fsBtn.addEventListener('click', async () => {
-    try {
-      if (fsElement()) await exitFs.call(document);
-      else await reqFs.call(root);
-    } catch (e) { console.warn('フルスクリーン切り替えに失敗:', e); }
-  });
-  const onFsChange = () => {
-    const on = !!fsElement();
-    fsBtn.setAttribute('aria-pressed', String(on));
-    fsBtn.setAttribute('aria-label', on ? 'フルスクリーン終了' : 'フルスクリーン');
-    setTimeout(onResize, 100);
-  };
-  document.addEventListener('fullscreenchange', onFsChange);
-  document.addEventListener('webkitfullscreenchange', onFsChange);
+  if (reqFs && exitFs) {
+    fsBtn.addEventListener('click', async () => {
+      try {
+        if (fsElement()) await exitFs.call(document);
+        else await reqFs.call(root);
+      } catch (e) { console.warn('フルスクリーン切り替えに失敗:', e); }
+    });
+    const onFsChange = () => setFsUi(!!fsElement());
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+  } else {
+    let told = false;
+    fsBtn.addEventListener('click', () => {
+      const on = document.body.classList.toggle('immersive');
+      setFsUi(on);
+      if (on && !told) {
+        told = true;
+        showToast('ボタン類を隠しました。右上のボタンで戻せます。アドレスバーも消すには、共有ボタン →「ホーム画面に追加」から開いてください。');
+      }
+    });
+  }
 }
 
 renderer.setAnimationLoop((now) => {
