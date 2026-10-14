@@ -2,6 +2,8 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>GLB Viewer (WebGPU)</title>
 <style>
@@ -12,14 +14,24 @@
     -webkit-user-select:none; user-select:none; }
   #viewer { position:fixed; inset:0; touch-action:none; }
   #viewer canvas { display:block; touch-action:none; }
-  #status { position:fixed; left:16px; top:calc(12px + env(safe-area-inset-top, 0px)); right:16px; max-width:420px;
+  #status { position:fixed; left:16px; top:calc(12px + env(safe-area-inset-top, 0px)); right:72px; max-width:420px;
     font-size:14px; line-height:1.5; }
   #bar { height:4px; background:#dde0e4; margin-top:6px; border-radius:2px; overflow:hidden; }
   #bar > div { height:100%; width:0; background:var(--accent); transition:width .15s; }
   #status.error { color:#c0392b; }
   #status.done #bar { display:none; }
-  #backend { position:fixed; right:16px; top:calc(12px + env(safe-area-inset-top, 0px)); font-size:12px; opacity:.5; pointer-events:none; }
+  #backend { position:fixed; right:72px; top:calc(12px + env(safe-area-inset-top, 0px)); font-size:12px; opacity:.5; pointer-events:none; }
 
+  #fs { position:fixed; top:calc(10px + env(safe-area-inset-top, 0px)); right:calc(12px + env(safe-area-inset-right, 0px));
+    width:44px; height:44px; display:none; align-items:center; justify-content:center; padding:0;
+    color:var(--fg); background:#f0f1f3; border:1px solid #c5c9cf; border-radius:22px; cursor:pointer;
+    touch-action:manipulation; box-shadow:0 1px 3px rgba(0,0,0,.12); }
+  #fs:hover { background:#e2e5e9; }
+  #fs:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  #fs svg { width:22px; height:22px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  #fs .ico-exit { display:none; }
+  #fs[aria-pressed="true"] .ico-enter { display:none; }
+  #fs[aria-pressed="true"] .ico-exit { display:block; }
   #cams { position:fixed; left:0; right:0; bottom:0; display:flex; gap:8px; overflow-x:auto;
     justify-content:safe center; touch-action:pan-x; scrollbar-width:none;
     padding:10px calc(12px + env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
@@ -43,6 +55,10 @@
   <button type="button" data-cam="Camera04">Camera04</button>
   <button type="button" data-cam="Camera05">Camera05</button>
 </div>
+<button id="fs" type="button" aria-label="フルスクリーン" aria-pressed="false">
+  <svg class="ico-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+  <svg class="ico-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+</button>
 <div id="backend"></div>
 <div id="status"><span id="msg">初期化中…</span><div id="bar"><div></div></div></div>
 
@@ -286,6 +302,33 @@ const onResize = () => {
 };
 window.addEventListener('resize', onResize);
 window.addEventListener('orientationchange', () => setTimeout(onResize, 200));
+
+// ---- フルスクリーン切り替え ----
+// iPhone の Safari はページ全体のフルスクリーンに非対応のため、その場合はボタンを表示しません
+// (「ホーム画面に追加」して開くと、アドレスバーなしで表示できます)
+const fsBtn = document.getElementById('fs');
+const root = document.documentElement;
+const reqFs = root.requestFullscreen || root.webkitRequestFullscreen;
+const exitFs = document.exitFullscreen || document.webkitExitFullscreen;
+const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+
+if (reqFs && exitFs) {
+  fsBtn.style.display = 'flex';
+  fsBtn.addEventListener('click', async () => {
+    try {
+      if (fsElement()) await exitFs.call(document);
+      else await reqFs.call(root);
+    } catch (e) { console.warn('フルスクリーン切り替えに失敗:', e); }
+  });
+  const onFsChange = () => {
+    const on = !!fsElement();
+    fsBtn.setAttribute('aria-pressed', String(on));
+    fsBtn.setAttribute('aria-label', on ? 'フルスクリーン終了' : 'フルスクリーン');
+    setTimeout(onResize, 100);
+  };
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+}
 
 renderer.setAnimationLoop((now) => {
   if (mixer) mixer.update(clock.getDelta());
